@@ -112,7 +112,7 @@ class TradeValidator:
             errors.append("Counterparty name too short")
         elif len(counterparty) > 100:
             warnings.append("Counterparty name is very long")
-        elif not re.match(r'^[a-zA-Z0-9\s\-\.\,\&\'\"]+, counterparty):
+        elif not re.match(r'^[a-zA-Z0-9\s\-\.\,\&\'\"]+$', counterparty):
             warnings.append("Counterparty name contains unusual characters")
         
         return {
@@ -216,7 +216,12 @@ class DataConsistencyValidator:
             
             # Check delta consistency with trade type
             if hasattr(trade, 'trade_type') and hasattr(trade, 'delta'):
-                if trade.trade_type.value in ['Option', 'Swaption']:
+                if hasattr(trade.trade_type, 'value'):
+                    trade_type_val = trade.trade_type.value
+                else:
+                    trade_type_val = str(trade.trade_type)
+                
+                if trade_type_val in ['Option', 'Swaption']:
                     if abs(trade.delta) > 1:
                         warnings.append(f"Trade {i+1}: Option delta outside [-1, 1] range")
                 else:
@@ -230,6 +235,156 @@ class DataConsistencyValidator:
             
             if total_collateral > total_notional * 2:
                 warnings.append("Collateral amount is very high relative to trade notional")
+        
+        return {
+            'valid': len(errors) == 0,
+            'errors': errors,
+            'warnings': warnings
+        }
+    
+    def validate_regulatory_parameters(self, alpha: float, capital_ratio: float) -> Dict[str, Any]:
+        """Validate regulatory parameters"""
+        
+        errors = []
+        warnings = []
+        
+        # Validate alpha
+        if alpha < 0.1 or alpha > 5.0:
+            errors.append("Alpha must be between 0.1 and 5.0")
+        elif alpha not in [0.5, 1.4]:  # Standard Basel values
+            warnings.append("Alpha value differs from standard Basel parameters (0.5 or 1.4)")
+        
+        # Validate capital ratio
+        if capital_ratio < 0.01 or capital_ratio > 0.5:
+            errors.append("Capital ratio must be between 1% and 50%")
+        elif capital_ratio != 0.08:  # Standard 8%
+            warnings.append("Capital ratio differs from standard 8% requirement")
+        
+        return {
+            'valid': len(errors) == 0,
+            'errors': errors,
+            'warnings': warnings
+        }
+
+class RegulatoryValidator:
+    """Validator for Basel regulatory compliance"""
+    
+    def __init__(self):
+        # Basel supervisory factors (as decimals)
+        self.supervisory_factors = {
+            'Interest Rate': {
+                'USD': {'<2y': 0.005, '2-5y': 0.005, '>5y': 0.015},
+                'EUR': {'<2y': 0.005, '2-5y': 0.005, '>5y': 0.015},
+                'JPY': {'<2y': 0.005, '2-5y': 0.005, '>5y': 0.015},
+                'GBP': {'<2y': 0.005, '2-5y': 0.005, '>5y': 0.015},
+                'other': {'<2y': 0.015, '2-5y': 0.015, '>5y': 0.015}
+            },
+            'Foreign Exchange': {'G10': 0.04, 'emerging': 0.15},
+            'Credit': {'IG_single': 0.0046, 'HY_single': 0.013},
+            'Equity': {'single_large': 0.32, 'single_small': 0.40},
+            'Commodity': {'energy': 0.18, 'metals': 0.18, 'agriculture': 0.18}
+        }
+        
+        # Basel supervisory correlations
+        self.supervisory_correlations = {
+            'Interest Rate': 0.99,
+            'Foreign Exchange': 0.60,
+            'Credit': 0.50,
+            'Equity': 0.80,
+            'Commodity': 0.40
+        }
+    
+    def validate_supervisory_parameters(self, asset_class: str, currency: str = None, 
+                                      maturity_years: float = None) -> Dict[str, Any]:
+        """Validate supervisory parameters for given trade characteristics"""
+        
+        errors = []
+        warnings = []
+        
+        # Validate asset class
+        if asset_class not in self.supervisory_factors:
+            errors.append(f"Unknown asset class: {asset_class}")
+            return {'valid': False, 'errors': errors, 'warnings': warnings}
+        
+        # Asset class specific validations
+        if asset_class == 'Interest Rate':
+            if not currency:
+                warnings.append("Currency not specified for Interest Rate trade")
+            elif not maturity_years:
+                warnings.append("Maturity not specified for Interest Rate trade")
+            else:
+                # Validate maturity bucket
+                if maturity_years < 0.01:
+                    errors.append("Maturity too short for Interest Rate trade")
+                elif maturity_years > 50:
+                    warnings.append("Very long maturity for Interest Rate trade")
+        
+        elif asset_class == 'Foreign Exchange':
+            if not currency:
+                errors.append("Currency required for Foreign Exchange trade")
+        
+        return {
+            'valid': len(errors) == 0,
+            'errors': errors,
+            'warnings': warnings
+        }
+    
+    def validate_calculation_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate SA-CCR calculation results for reasonableness"""
+        
+        errors = []
+        warnings = []
+        
+        if not result or 'final_results' not in result:
+            errors.append("Invalid calculation result structure")
+            return {'valid': False, 'errors': errors, 'warnings': warnings}
+        
+        final_results = result['final_results']
+        
+        # Validate key result fields exist
+        required_fields = ['replacement_cost', 'potential_future_exposure', 
+                          'exposure_at_default', 'risk_weighted_assets', 'capital_requirement']
+        
+        for field in required_fields:
+            if field not in final_results:
+                errors.append(f"Missing result field: {field}")
+            elif final_results[field] < 0:
+                errors.append(f"Negative value for {field}: {final_results[field]}")
+        
+        if errors:
+            return {'valid': False, 'errors': errors, 'warnings': warnings}
+        
+        # Reasonableness checks
+        rc = final_results['replacement_cost']
+        pfe = final_results['potential_future_exposure']
+        ead = final_results['exposure_at_default']
+        rwa = final_results['risk_weighted_assets']
+        capital = final_results['capital_requirement']
+        
+        # EAD should equal Alpha * (RC + PFE)
+        calculated_ead = rc + pfe
+        if abs(ead - calculated_ead) > calculated_ead * 0.01:  # 1% tolerance
+            # Check if alpha was applied
+            alpha_ratios = [0.5, 1.4]  # Possible alpha values
+            alpha_applied = False
+            
+            for alpha in alpha_ratios:
+                if abs(ead - alpha * calculated_ead) < alpha * calculated_ead * 0.01:
+                    alpha_applied = True
+                    break
+            
+            if not alpha_applied:
+                warnings.append("EAD calculation may be incorrect")
+        
+        # Capital should be approximately 8% of RWA
+        expected_capital = rwa * 0.08
+        if abs(capital - expected_capital) > expected_capital * 0.01:
+            warnings.append("Capital requirement calculation may be incorrect")
+        
+        # PFE should be positive if there are trades
+        portfolio_summary = final_results.get('portfolio_summary', {})
+        if portfolio_summary.get('trade_count', 0) > 0 and pfe == 0:
+            warnings.append("PFE is zero despite having trades")
         
         return {
             'valid': len(errors) == 0,
