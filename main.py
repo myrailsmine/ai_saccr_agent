@@ -750,7 +750,7 @@ class SACCRApplication:
                 </div>
                 """, unsafe_allow_html=True)
     
-    def _render_executive_summary(self, results):
+ def _render_executive_summary(self, results):
         """Render executive summary of results"""
         
         final_results = results['final_results']
