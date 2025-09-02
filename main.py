@@ -1598,19 +1598,152 @@ What would you like to know about SA-CCR?"""
         # Configuration management
         st.markdown("### Configuration")
         
-        config_tabs = st.tabs(["📊 Calculation", "🗄️ Database", "🎨 UI", "🔧 Advanced"])
+        config_tabs = st.tabs(["🤖 LLM Setup", "📊 Calculation", "🗄️ Database", "🎨 UI", "🔧 Advanced"])
         
         with config_tabs[0]:
-            self._render_calculation_settings()
+            self._render_llm_settings()
         
         with config_tabs[1]:
-            self._render_database_settings()
+            self._render_calculation_settings()
         
         with config_tabs[2]:
-            self._render_ui_settings()
+            self._render_database_settings()
         
         with config_tabs[3]:
+            self._render_ui_settings()
+        
+        with config_tabs[4]:
             self._render_advanced_settings()
+    
+    def _render_llm_settings(self):
+        """Render LLM configuration settings"""
+        st.markdown("#### LLM Configuration for AI Assistant")
+        
+        st.markdown("Configure your language model connection for the AI assistant:")
+        
+        # LLM Configuration Form
+        with st.form("llm_config_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                base_url = st.text_input(
+                    "Base URL", 
+                    value="http://localhost:8123/v1",
+                    help="URL of your LLM API endpoint"
+                )
+                api_key = st.text_input(
+                    "API Key", 
+                    value="dummy", 
+                    type="password",
+                    help="API key for authentication"
+                )
+                
+            with col2:
+                model = st.text_input(
+                    "Model", 
+                    value="llama3",
+                    help="Model name (e.g., llama3, gpt-4, claude-3)"
+                )
+                temperature = st.slider(
+                    "Temperature", 
+                    0.0, 1.0, 0.3, 0.1,
+                    help="Controls randomness in responses"
+                )
+            
+            max_tokens = st.number_input(
+                "Max Tokens", 
+                1000, 8000, 4000, 100,
+                help="Maximum response length"
+            )
+            
+            streaming = st.checkbox(
+                "Enable Streaming", 
+                value=False,
+                help="Stream responses token by token"
+            )
+            
+            submitted = st.form_submit_button("🔗 Connect & Test LLM", type="primary")
+            
+            if submitted:
+                config = {
+                    'base_url': base_url,
+                    'api_key': api_key,
+                    'model': model,
+                    'temperature': temperature,
+                    'max_tokens': max_tokens,
+                    'streaming': streaming
+                }
+                
+                with st.spinner("Testing LLM connection..."):
+                    if self.setup_llm_connection(config):
+                        st.success("✅ LLM Connected Successfully!")
+                        st.info("You can now use the AI Assistant with full language model capabilities.")
+                    else:
+                        st.error("❌ LLM Connection Failed")
+                        st.error("Please check your configuration and try again.")
+        
+        # Connection Status
+        st.markdown("#### Connection Status")
+        if self.llm_connection_status == "connected":
+            st.success("🟢 LLM is connected and ready")
+            
+            # Test query button
+            if st.button("Test AI Response"):
+                try:
+                    from langchain.schema import HumanMessage, SystemMessage
+                    test_response = self.llm.invoke([
+                        SystemMessage(content="You are a helpful SA-CCR expert."),
+                        HumanMessage(content="Explain SA-CCR in one sentence.")
+                    ])
+                    st.write(f"**Test Response:** {test_response.content}")
+                except Exception as e:
+                    st.error(f"Test failed: {str(e)}")
+        else:
+            st.warning("🟡 LLM is not connected")
+            
+        # Configuration Help
+        st.markdown("#### Configuration Help")
+        
+        with st.expander("📚 Setup Instructions", expanded=False):
+            st.markdown("""
+**Popular LLM Configurations:**
+
+**1. OpenAI API:**
+- Base URL: `https://api.openai.com/v1`
+- Model: `gpt-4` or `gpt-3.5-turbo`
+- API Key: Your OpenAI API key
+
+**2. Local Ollama:**
+- Base URL: `http://localhost:11434/v1`
+- Model: `llama3`, `mistral`, `codellama`
+- API Key: `dummy` (not needed for local)
+
+**3. LM Studio:**
+- Base URL: `http://localhost:1234/v1`
+- Model: Model name from LM Studio
+- API Key: `dummy`
+
+**4. Custom Endpoint:**
+- Configure according to your API provider's documentation
+- Ensure the endpoint supports OpenAI-compatible API format
+
+**Troubleshooting:**
+- Verify the base URL is accessible
+- Check that the model name is correct
+- Ensure API key has necessary permissions
+- Test with a simple curl command first
+""")
+        
+        with st.expander("🔒 Security Notes", expanded=False):
+            st.markdown("""
+**Important Security Considerations:**
+
+- API keys are stored only in session memory
+- Keys are not saved to disk or database
+- Use environment variables for production deployments
+- Consider using local models for sensitive data
+- Rotate API keys regularly for cloud providers
+""")
     
     def _render_calculation_settings(self):
         """Render calculation configuration settings"""
