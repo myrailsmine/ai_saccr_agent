@@ -811,11 +811,296 @@ class SACCRApplication:
             })
             st.success("Configuration updated!")
     
-    def _render_database_settings(self):
-        """Render database configuration settings"""
-        st.markdown("#### Database Configuration")
+    def _render_collateral_input(self):
+        """Render collateral input interface"""
         
-        # Database maintenance
+        st.markdown("### Collateral Portfolio")
+        
+        if 'collateral_input' not in st.session_state:
+            st.session_state.collateral_input = []
+        
+        with st.expander("Add Collateral", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                coll_type = st.selectbox("Collateral Type", 
+                                       ["Cash", "Government Bonds", "Corporate Bonds", "Equities", "Money Market Funds"])
+            
+            with col2:
+                coll_currency = st.selectbox("Collateral Currency", ["USD", "EUR", "GBP", "JPY", "CHF", "CAD"])
+            
+            with col3:
+                coll_amount = st.number_input("Amount ($)", min_value=0.0, value=10000000.0, step=1000000.0)
+            
+            if st.button("Add Collateral", type="secondary"):
+                from src.models.trade_models import Collateral, CollateralType
+                
+                new_collateral = Collateral(
+                    collateral_type=CollateralType(coll_type),
+                    currency=coll_currency,
+                    amount=coll_amount
+                )
+                st.session_state.collateral_input.append(new_collateral)
+                st.success(f"Added {coll_type} collateral")
+                st.rerun()
+        
+        # Display current collateral
+        if st.session_state.collateral_input:
+            st.markdown("**Current Collateral:**")
+            
+            collateral_data = []
+            for i, coll in enumerate(st.session_state.collateral_input):
+                collateral_data.append({
+                    'Index': i + 1,
+                    'Type': coll.collateral_type.value,
+                    'Currency': coll.currency,
+                    'Amount ($M)': f"{coll.amount/1_000_000:.2f}",
+                    'Market Value ($M)': f"{coll.market_value/1_000_000:.2f}"
+                })
+            
+            df = pd.DataFrame(collateral_data)
+            st.dataframe(df, use_container_width=True)
+            
+            if st.button("Clear All Collateral", type="secondary"):
+                st.session_state.collateral_input = []
+                st.rerun()
+    
+    def _render_parameter_input(self):
+        """Render calculation parameter input"""
+        
+        st.markdown("### Calculation Parameters")
+        
         col1, col2 = st.columns(2)
         
-        with col
+        with col1:
+            st.markdown("**Regulatory Parameters**")
+            alpha_bilateral = st.number_input("Alpha (Bilateral)", value=1.4, min_value=0.1, max_value=5.0, step=0.1)
+            alpha_cleared = st.number_input("Alpha (Cleared)", value=0.5, min_value=0.1, max_value=2.0, step=0.1)
+            capital_ratio = st.number_input("Capital Ratio", value=0.08, min_value=0.01, max_value=0.5, step=0.01)
+        
+        with col2:
+            st.markdown("**Calculation Settings**")
+            enable_cache = st.checkbox("Enable Calculation Cache", value=True)
+            show_debug = st.checkbox("Show Debug Information", value=False)
+            decimal_places = st.slider("Decimal Places", 0, 4, 2)
+        
+        # Store parameters in session state
+        st.session_state.calculation_parameters = {
+            'alpha_bilateral': alpha_bilateral,
+            'alpha_cleared': alpha_cleared,
+            'capital_ratio': capital_ratio,
+            'enable_cache': enable_cache,
+            'show_debug': show_debug,
+            'decimal_places': decimal_places
+        }
+    
+    def _show_portfolio_loader(self):
+        """Show portfolio loader interface"""
+        
+        st.markdown("### Load Saved Portfolio")
+        
+        try:
+            # Get list of saved portfolios
+            portfolios = self.db_manager.get_portfolio_summary()
+            
+            if not portfolios.empty:
+                portfolio_options = portfolios['portfolio_name'].tolist()
+                selected_portfolio = st.selectbox("Select Portfolio:", portfolio_options)
+                
+                if st.button("Load Portfolio") and selected_portfolio:
+                    # Find portfolio ID
+                    portfolio_id = portfolios[portfolios['portfolio_name'] == selected_portfolio]['portfolio_id'].iloc[0]
+                    
+                    # Load portfolio
+                    portfolio = self.db_manager.load_portfolio(portfolio_id)
+                    
+                    if portfolio and portfolio.netting_sets:
+                        # Convert to session state format
+                        netting_set = portfolio.netting_sets[0]  # Take first netting set
+                        
+                        st.session_state.current_portfolio = {
+                            'netting_set_id': netting_set.netting_set_id,
+                            'counterparty': netting_set.counterparty,
+                            'threshold': netting_set.threshold,
+                            'mta': netting_set.mta,
+                            'trades': netting_set.trades
+                        }
+                        
+                        st.success(f"Loaded portfolio: {selected_portfolio}")
+                        st.rerun()
+                    else:
+                        st.error("Failed to load portfolio")
+            else:
+                st.info("No saved portfolios found")
+                
+        except Exception as e:
+            st.error(f"Error loading portfolios: {str(e)}")
+            logger.error(f"Portfolio loading error: {e}")
+    
+    def _render_executive_summary(self, results):
+        """Render executive summary of results"""
+        
+        final_results = results['final_results']
+        
+        st.markdown("### Executive Summary")
+        
+        # Key insights
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Risk Profile:**")
+            
+            total_notional = final_results['portfolio_summary']['total_notional']
+            ead = final_results['exposure_at_default']
+            ead_ratio = (ead / total_notional) * 100 if total_notional > 0 else 0
+            
+            st.write(f"• EAD/Notional Ratio: {ead_ratio:.2f}%")
+            st.write(f"• Capital Efficiency: {(1 - ead_ratio/100)*100:.1f}%")
+            
+            # Risk drivers
+            if ead > 0:
+                rc_contribution = (final_results['replacement_cost'] / ead) * 100
+                pfe_contribution = (final_results['potential_future_exposure'] / ead) * 100
+                
+                st.write(f"• RC Contribution: {rc_contribution:.1f}%")
+                st.write(f"• PFE Contribution: {pfe_contribution:.1f}%")
+        
+        with col2:
+            st.markdown("**Optimization Opportunities:**")
+            
+            # Simple optimization suggestions
+            suggestions = []
+            
+            if final_results['replacement_cost'] > final_results['potential_future_exposure']:
+                suggestions.append("Consider additional collateral posting")
+            
+            if ead_ratio > 10:
+                suggestions.append("Review netting agreement optimization")
+            
+            if final_results.get('portfolio_summary', {}).get('trade_count', 0) > 100:
+                suggestions.append("Consider trade compression strategies")
+            
+            suggestions.append("Evaluate central clearing eligibility")
+            
+            for suggestion in suggestions:
+                st.write(f"• {suggestion}")
+    
+    def _render_risk_analysis(self, results):
+        """Render risk analysis charts and insights"""
+        
+        st.markdown("### Risk Analysis")
+        
+        # Risk decomposition chart
+        final_results = results['final_results']
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # EAD Components
+            rc = final_results['replacement_cost']
+            pfe = final_results['potential_future_exposure']
+            
+            fig = go.Figure(data=[
+                go.Pie(
+                    labels=['Replacement Cost', 'Potential Future Exposure'],
+                    values=[rc, pfe],
+                    hole=0.3,
+                    marker_colors=['#2563eb', '#7c3aed']
+                )
+            ])
+            
+            fig.update_layout(
+                title="EAD Components",
+                height=300,
+                showlegend=True
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # Portfolio metrics over time (if historical data available)
+            try:
+                portfolio_id = st.session_state.current_portfolio['netting_set_id']
+                history = self.db_manager.get_calculation_history(portfolio_id, limit=10)
+                
+                if not history.empty:
+                    fig = go.Figure()
+                    
+                    fig.add_trace(go.Scatter(
+                        x=history['calculation_date'],
+                        y=history['exposure_at_default'],
+                        mode='lines+markers',
+                        name='EAD',
+                        line=dict(color='#2563eb')
+                    ))
+                    
+                    fig.update_layout(
+                        title="EAD History",
+                        xaxis_title="Date",
+                        yaxis_title="EAD ($)",
+                        height=300
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No historical data available")
+                    
+            except Exception as e:
+                st.info("Historical analysis unavailable")
+    
+    def _render_optimization_analysis(self, results):
+        """Render optimization recommendations"""
+        
+        st.markdown("### Optimization Recommendations")
+        
+        # Generate optimization suggestions based on results
+        final_results = results['final_results']
+        calculation_steps = results['calculation_steps']
+        
+        recommendations = []
+        
+        # Analyze PFE multiplier
+        pfe_step = next((step for step in calculation_steps if step['step'] == 15), None)
+        if pfe_step:
+            multiplier = pfe_step['data']['multiplier']
+            if multiplier > 0.8:
+                recommendations.append({
+                    'category': 'Netting Optimization',
+                    'recommendation': 'Consider portfolio rebalancing to improve netting benefits',
+                    'impact': 'Medium',
+                    'effort': 'Low'
+                })
+        
+        # Analyze replacement cost
+        if final_results['replacement_cost'] > 0:
+            recommendations.append({
+                'category': 'Collateral Optimization',
+                'recommendation': 'Evaluate collateral posting to reduce replacement cost',
+                'impact': 'High',
+                'effort': 'Medium'
+            })
+        
+        # Analyze central clearing
+        ceu_step = next((step for step in calculation_steps if step['step'] == 19), None)
+        if ceu_step and ceu_step['data']['overall_ceu_flag'] == 1:
+            recommendations.append({
+                'category': 'Central Clearing',
+                'recommendation': 'Assess trades eligible for central clearing (Alpha reduction from 1.4 to 0.5)',
+                'impact': 'Very High',
+                'effort': 'High'
+            })
+        
+        # Display recommendations
+        for i, rec in enumerate(recommendations):
+            with st.expander(f"Recommendation {i+1}: {rec['category']}", expanded=True):
+                st.write(f"**Action:** {rec['recommendation']}")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    impact_color = {'Low': 'blue', 'Medium': 'orange', 'High': 'red', 'Very High': 'purple'}
+                    st.markdown(f"**Impact:** <span style='color: {impact_color.get(rec['impact'], 'black')}'>{rec['impact']}</span>", 
+                               unsafe_allow_html=True)
+                with col2:
+                    effort_color = {'Low': 'green', 'Medium': 'orange', 'High': 'red'}
+                    st.markdown(f"**Effort:** <span style='color: {effort_color.get(rec['effort'], 'black')}'>{rec['effort']}</span>", 
+                               unsafe_allow_html=True)
