@@ -750,7 +750,7 @@ class SACCRApplication:
                 </div>
                 """, unsafe_allow_html=True)
     
- def _render_executive_summary(self, results):
+    def _render_executive_summary(self, results):
         """Render executive summary of results"""
         
         final_results = results['final_results']
@@ -1027,7 +1027,527 @@ class SACCRApplication:
                     st.markdown(f"**Effort:** <span style='color: {effort_color.get(rec['effort'], 'black')}'>{rec['effort']}</span>", 
                                unsafe_allow_html=True)
     
-    def _render_portfolio_page(self):
+    def _render_ai_assistant_page(self):
+        """Render AI assistant chat interface with SA-CCR calculation capabilities"""
+        
+        st.markdown("## 🤖 AI SA-CCR Assistant")
+        st.markdown("Ask me anything about SA-CCR calculations, or describe your portfolio for automatic calculation!")
+        
+        # Initialize chat history
+        if 'ai_chat_history' not in st.session_state:
+            st.session_state.ai_chat_history = [
+                {
+                    'role': 'assistant',
+                    'content': """Hello! I'm your SA-CCR expert assistant. I can help you with:
+
+**📊 Automatic Calculations**: Describe your trades and I'll calculate SA-CCR automatically
+**❓ SA-CCR Questions**: Ask about Basel regulations, formulas, or methodology
+**🎯 Optimization**: Get suggestions to reduce capital requirements
+**📈 Analysis**: Analyze your calculation results
+
+**Example queries:**
+- "Calculate SA-CCR for a $100M USD interest rate swap with JP Morgan, 5-year maturity"
+- "What's the difference between PFE and RC in SA-CCR?"
+- "I have 3 FX forwards with Deutsche Bank, each $50M, can you calculate the exposure?"
+- "How can I optimize my derivatives portfolio to reduce capital?"
+""",
+                    'timestamp': datetime.now()
+                }
+            ]
+        
+        # Chat interface
+        self._render_chat_interface()
+        
+        # Quick action buttons
+        st.markdown("### Quick Actions")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if st.button("💡 Sample Portfolio", use_container_width=True):
+                sample_query = "Calculate SA-CCR for a portfolio with: 1) $200M USD interest rate swap with Goldman Sachs, 7-year maturity, 2) $150M EUR/USD FX forward with Deutsche Bank, 1-year maturity, 3) $100M equity option on S&P500 with Morgan Stanley, 6-month maturity, delta 0.6"
+                self._process_ai_query(sample_query)
+        
+        with col2:
+            if st.button("❓ SA-CCR Basics", use_container_width=True):
+                basics_query = "Explain the SA-CCR methodology and its key components"
+                self._process_ai_query(basics_query)
+        
+        with col3:
+            if st.button("🎯 Optimization Tips", use_container_width=True):
+                optimization_query = "What are the most effective ways to reduce SA-CCR capital requirements?"
+                self._process_ai_query(optimization_query)
+        
+        with col4:
+            if st.button("🧹 Clear Chat", use_container_width=True):
+                st.session_state.ai_chat_history = st.session_state.ai_chat_history[:1]  # Keep welcome message
+                st.rerun()
+    
+    def _render_chat_interface(self):
+        """Render the chat interface"""
+        
+        # Display chat history
+        chat_container = st.container()
+        with chat_container:
+            for message in st.session_state.ai_chat_history:
+                if message['role'] == 'user':
+                    st.markdown(f"""
+                    <div style="background: #f0f2f6; padding: 1rem; border-radius: 10px; margin: 0.5rem 0; margin-left: 2rem;">
+                        <strong>👤 You:</strong><br>
+                        {message['content']}
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div style="background: white; border: 1px solid #e1e5e9; padding: 1rem; border-radius: 10px; margin: 0.5rem 0; margin-right: 2rem;">
+                        <strong>🤖 SA-CCR Assistant:</strong><br>
+                        {message['content']}
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Chat input
+        st.markdown("### Your Question")
+        
+        # Use form for better UX
+        with st.form("chat_form", clear_on_submit=True):
+            user_input = st.text_area(
+                "Ask about SA-CCR or describe your portfolio:",
+                placeholder="e.g., 'Calculate SA-CCR for a $100M interest rate swap with Bank XYZ' or 'What is the PFE multiplier formula?'",
+                height=100
+            )
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                submitted = st.form_submit_button("Send Message", type="primary", use_container_width=True)
+            with col2:
+                voice_mode = st.form_submit_button("🎤 Voice Input", use_container_width=True)
+            
+            if submitted and user_input.strip():
+                self._process_ai_query(user_input.strip())
+            elif voice_mode:
+                st.info("Voice input feature coming soon!")
+    
+    def _process_ai_query(self, user_query: str):
+        """Process user query and generate AI response with potential SA-CCR calculation"""
+        
+        # Add user message to chat
+        st.session_state.ai_chat_history.append({
+            'role': 'user',
+            'content': user_query,
+            'timestamp': datetime.now()
+        })
+        
+        try:
+            # Analyze query type
+            query_analysis = self._analyze_query_intent(user_query)
+            
+            # Generate response based on query type
+            if query_analysis['requires_calculation']:
+                response = self._handle_calculation_query(user_query, query_analysis)
+            else:
+                response = self._handle_information_query(user_query, query_analysis)
+            
+            # Add AI response to chat
+            st.session_state.ai_chat_history.append({
+                'role': 'assistant',
+                'content': response,
+                'timestamp': datetime.now()
+            })
+            
+        except Exception as e:
+            error_response = f"I apologize, but I encountered an error processing your request: {str(e)}\n\nPlease try rephrasing your question or contact support if the issue persists."
+            
+            st.session_state.ai_chat_history.append({
+                'role': 'assistant',
+                'content': error_response,
+                'timestamp': datetime.now()
+            })
+        
+        st.rerun()
+    
+    def _analyze_query_intent(self, query: str) -> Dict:
+        """Analyze user query to determine intent and extract trade information"""
+        
+        query_lower = query.lower()
+        
+        # Check if query requires calculation
+        calculation_keywords = [
+            'calculate', 'compute', 'sa-ccr for', 'portfolio', 'exposure',
+            'swap', 'forward', 'option', 'trade', 'notional', 'ead', 'rwa'
+        ]
+        
+        requires_calculation = any(keyword in query_lower for keyword in calculation_keywords)
+        
+        # Extract trade information using pattern matching
+        extracted_trades = self._extract_trade_information(query)
+        
+        # Determine query category
+        if 'optimization' in query_lower or 'reduce' in query_lower or 'improve' in query_lower:
+            category = 'optimization'
+        elif 'explain' in query_lower or 'what is' in query_lower or 'how does' in query_lower:
+            category = 'explanation'
+        elif requires_calculation and extracted_trades:
+            category = 'calculation'
+        else:
+            category = 'general'
+        
+        return {
+            'requires_calculation': requires_calculation and len(extracted_trades) > 0,
+            'extracted_trades': extracted_trades,
+            'category': category,
+            'has_counterparty': bool(self._extract_counterparty(query)),
+            'counterparty': self._extract_counterparty(query)
+        }
+    
+    def _extract_trade_information(self, query: str) -> List[Dict]:
+        """Extract trade information from natural language query"""
+        
+        import re
+        
+        trades = []
+        
+        # Pattern for monetary amounts
+        money_pattern = r'\$?(\d+(?:,\d{3})*(?:\.\d+)?)\s*([KMB]?)\b'
+        
+        # Pattern for time periods
+        time_pattern = r'(\d+(?:\.\d+)?)\s*[-\s]?\s*(year|yr|month|mon|day)s?'
+        
+        # Pattern for currencies
+        currency_pattern = r'\b(USD|EUR|GBP|JPY|CHF|CAD|AUD|NZD|SEK|NOK)\b'
+        
+        # Pattern for asset types
+        asset_patterns = {
+            'Interest Rate': r'\b(interest\s+rate\s+swap|irs|swap)\b',
+            'Foreign Exchange': r'\b(fx\s+forward|fx|foreign\s+exchange|currency)\b',
+            'Equity': r'\b(equity\s+option|stock\s+option|equity|option\s+on)\b',
+            'Credit': r'\b(cds|credit\s+default\s+swap|credit)\b',
+            'Commodity': r'\b(commodity|oil|gold|wheat)\b'
+        }
+        
+        # Extract individual trade descriptions
+        trade_separators = r'[,;]\s*\d+\)'
+        potential_trades = re.split(trade_separators, query)
+        
+        # If no clear separation, treat as single trade
+        if len(potential_trades) == 1:
+            potential_trades = [query]
+        
+        for i, trade_text in enumerate(potential_trades):
+            trade_info = {
+                'trade_id': f'AI_TRADE_{i+1}',
+                'notional': 100000000.0,  # Default $100M
+                'currency': 'USD',
+                'maturity_years': 5.0,
+                'asset_class': 'Interest Rate',
+                'trade_type': 'Swap',
+                'delta': 1.0,
+                'mtm_value': 0.0
+            }
+            
+            # Extract notional
+            money_matches = re.findall(money_pattern, trade_text, re.IGNORECASE)
+            if money_matches:
+                amount, multiplier = money_matches[0]
+                amount = float(amount.replace(',', ''))
+                
+                multiplier_map = {'K': 1000, 'M': 1000000, 'B': 1000000000}
+                if multiplier.upper() in multiplier_map:
+                    amount *= multiplier_map[multiplier.upper()]
+                
+                trade_info['notional'] = amount
+            
+            # Extract currency
+            currency_matches = re.findall(currency_pattern, trade_text, re.IGNORECASE)
+            if currency_matches:
+                trade_info['currency'] = currency_matches[0].upper()
+            
+            # Extract maturity
+            time_matches = re.findall(time_pattern, trade_text, re.IGNORECASE)
+            if time_matches:
+                period, unit = time_matches[0]
+                period = float(period)
+                
+                if unit.lower().startswith('year') or unit.lower().startswith('yr'):
+                    trade_info['maturity_years'] = period
+                elif unit.lower().startswith('month') or unit.lower().startswith('mon'):
+                    trade_info['maturity_years'] = period / 12
+                elif unit.lower().startswith('day'):
+                    trade_info['maturity_years'] = period / 365
+            
+            # Extract asset class and trade type
+            for asset_class, pattern in asset_patterns.items():
+                if re.search(pattern, trade_text, re.IGNORECASE):
+                    trade_info['asset_class'] = asset_class
+                    
+                    if asset_class == 'Interest Rate':
+                        trade_info['trade_type'] = 'Swap'
+                    elif asset_class == 'Foreign Exchange':
+                        trade_info['trade_type'] = 'Forward'
+                    elif asset_class == 'Equity':
+                        trade_info['trade_type'] = 'Option'
+                        # Extract delta if mentioned
+                        delta_pattern = r'delta\s+(\d+(?:\.\d+)?)'
+                        delta_match = re.search(delta_pattern, trade_text, re.IGNORECASE)
+                        if delta_match:
+                            trade_info['delta'] = float(delta_match.group(1))
+                    elif asset_class == 'Credit':
+                        trade_info['trade_type'] = 'Credit Default Swap'
+                    break
+            
+            trades.append(trade_info)
+        
+        return trades
+    
+    def _extract_counterparty(self, query: str) -> str:
+        """Extract counterparty name from query"""
+        
+        # Common bank patterns
+        bank_patterns = [
+            r'\b(jp\s*morgan|jpmorgan)\b',
+            r'\b(goldman\s*sachs)\b',
+            r'\b(morgan\s*stanley)\b',
+            r'\b(deutsche\s*bank)\b',
+            r'\b(barclays)\b',
+            r'\b(citibank|citi)\b',
+            r'\b(bank\s+of\s+america|boa)\b',
+            r'\b(wells\s*fargo)\b',
+            r'\b(hsbc)\b',
+            r'\b(ubs)\b',
+            r'\b(credit\s*suisse)\b'
+        ]
+        
+        for pattern in bank_patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                return match.group(0).title()
+        
+        # Generic "with [Name]" pattern
+        with_pattern = r'\bwith\s+([A-Z][a-zA-Z\s]+(?:Bank|Corp|LLC|Ltd|Inc)?)\b'
+        match = re.search(with_pattern, query)
+        if match:
+            return match.group(1).strip()
+        
+        return "Counterparty ABC"
+    
+    def _handle_calculation_query(self, query: str, analysis: Dict) -> str:
+        """Handle queries that require SA-CCR calculation"""
+        
+        try:
+            # Create trades from extracted information
+            trades = []
+            counterparty = analysis.get('counterparty', 'AI Generated Portfolio')
+            
+            for trade_info in analysis['extracted_trades']:
+                trade = Trade(
+                    trade_id=trade_info['trade_id'],
+                    counterparty=counterparty,
+                    asset_class=AssetClass(trade_info['asset_class']),
+                    trade_type=TradeType(trade_info['trade_type']),
+                    notional=trade_info['notional'],
+                    currency=trade_info['currency'],
+                    underlying=f"{trade_info['asset_class']} - {trade_info['trade_type']}",
+                    maturity_date=datetime.now() + timedelta(days=int(trade_info['maturity_years'] * 365)),
+                    mtm_value=trade_info['mtm_value'],
+                    delta=trade_info['delta']
+                )
+                trades.append(trade)
+            
+            # Create portfolio
+            portfolio_data = {
+                'netting_set_id': f"AI_NS_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                'counterparty': counterparty,
+                'threshold': 1000000.0,  # Default $1M threshold
+                'mta': 500000.0,  # Default $500K MTA
+                'trades': trades
+            }
+            
+            # Perform SA-CCR calculation
+            results = self.saccr_engine.calculate_comprehensive_saccr(portfolio_data)
+            
+            # Store results for potential further analysis
+            st.session_state.ai_generated_results = results
+            st.session_state.ai_generated_portfolio = portfolio_data
+            
+            # Format response
+            final_results = results['final_results']
+            
+            response = f"""**✅ SA-CCR Calculation Complete!**
+
+**Portfolio Summary:**
+• Counterparty: {counterparty}
+• Number of trades: {len(trades)}
+• Total notional: ${sum(t.notional for t in trades)/1_000_000:.1f}M
+
+**Key Results:**
+• **Replacement Cost (RC)**: ${final_results['replacement_cost']/1_000_000:.2f}M
+• **Potential Future Exposure (PFE)**: ${final_results['potential_future_exposure']/1_000_000:.2f}M
+• **Exposure at Default (EAD)**: ${final_results['exposure_at_default']/1_000_000:.2f}M
+• **Risk Weighted Assets (RWA)**: ${final_results['risk_weighted_assets']/1_000_000:.2f}M
+• **Capital Requirement**: ${final_results['capital_requirement']/1_000:.0f}K
+
+**Trade Details:**
+"""
+            
+            for i, trade in enumerate(trades, 1):
+                response += f"• Trade {i}: {trade.asset_class.value} {trade.trade_type.value}, ${trade.notional/1_000_000:.1f}M {trade.currency}, {trade.time_to_maturity():.1f}Y maturity\n"
+            
+            # Add optimization suggestions
+            ead_ratio = (final_results['exposure_at_default'] / sum(t.notional for t in trades)) * 100
+            
+            response += f"\n**Analysis:**\n"
+            response += f"• EAD/Notional ratio: {ead_ratio:.2f}%\n"
+            
+            if final_results['replacement_cost'] > final_results['potential_future_exposure']:
+                response += f"• RC dominates exposure - consider collateral posting\n"
+            else:
+                response += f"• PFE dominates exposure - portfolio shows future risk\n"
+            
+            response += f"\n**💡 Want to explore optimization strategies or see the detailed 24-step breakdown?**"
+            
+            return response
+            
+        except Exception as e:
+            return f"I encountered an error performing the SA-CCR calculation: {str(e)}\n\nPlease check your trade descriptions and try again. Make sure to include notional amounts, currencies, and maturities."
+    
+    def _handle_information_query(self, query: str, analysis: Dict) -> str:
+        """Handle informational queries about SA-CCR"""
+        
+        query_lower = query.lower()
+        
+        # SA-CCR methodology questions
+        if 'methodology' in query_lower or 'sa-ccr' in query_lower and ('what' in query_lower or 'explain' in query_lower):
+            return """**SA-CCR (Standardized Approach for Counterparty Credit Risk) Overview:**
+
+SA-CCR is the Basel III framework for calculating counterparty credit risk exposure for derivatives. It follows a comprehensive 24-step process:
+
+**Key Components:**
+1. **Replacement Cost (RC)**: Current exposure if counterparty defaults today
+2. **Potential Future Exposure (PFE)**: Potential exposure over the life of trades
+3. **Exposure at Default (EAD)**: Total regulatory exposure = Alpha × (RC + PFE)
+
+**Main Steps:**
+• **Steps 1-4**: Data preparation and classification
+• **Steps 5-13**: Add-on calculations (PFE components)
+• **Steps 14-18**: Current exposure and RC calculation
+• **Steps 19-24**: Final EAD and RWA calculation
+
+**Key Formula**: EAD = α × (RC + PFE)
+Where α = 1.4 for bilateral trades, 0.5 for centrally cleared
+
+Would you like me to explain any specific component in detail?"""
+        
+        # PFE Multiplier questions
+        elif 'pfe' in query_lower and 'multiplier' in query_lower:
+            return """**PFE Multiplier Explanation:**
+
+The PFE multiplier captures netting benefits within a netting set.
+
+**Formula**: Multiplier = min(1, 0.05 + 0.95 × exp(-0.05 × max(0, V) / AddOn))
+
+**Components:**
+• **V**: Net mark-to-market value of all trades
+• **AddOn**: Aggregate add-on (potential future exposure)
+• **Range**: 0.05 to 1.0
+
+**How it works:**
+• When V is negative (portfolio out-of-money): Multiplier approaches 0.05 (maximum netting benefit)
+• When V >> AddOn: Multiplier approaches 1.0 (minimal netting benefit)
+• Floor of 0.05 ensures some potential exposure is always recognized
+
+**Optimization tip**: Balance portfolio MTM through strategic hedging to maximize netting benefits!"""
+        
+        # Optimization questions
+        elif 'optimization' in query_lower or 'reduce' in query_lower:
+            return """**🎯 SA-CCR Capital Optimization Strategies:**
+
+**1. Central Clearing (Highest Impact)**
+• Move eligible trades to CCPs
+• Reduces Alpha from 1.4 to 0.5 (65% reduction!)
+• Typically saves 50-70% capital
+
+**2. Netting Optimization**
+• Consolidate trades under master agreements
+• Balance long/short positions to reduce net MTM
+• Can reduce both RC and PFE multiplier
+
+**3. Collateral Management**
+• Post high-quality collateral to reduce RC
+• Negotiate lower thresholds and MTAs
+• Consider tri-party collateral arrangements
+
+**4. Portfolio Structure**
+• Diversify across asset classes (benefit from correlations)
+• Consider trade compression programs
+• Optimize maturity ladders
+
+**5. Trade Structure**
+• Use shorter maturities where possible
+• Consider option structures vs linear trades
+• Optimize delta exposure
+
+**Expected Impact**: Combined strategies typically achieve 40-70% capital reduction.
+
+Want me to analyze a specific portfolio for optimization opportunities?"""
+        
+        # Formula questions
+        elif 'formula' in query_lower or 'calculation' in query_lower:
+            return """**Key SA-CCR Formulas:**
+
+**1. Exposure at Default:**
+```
+EAD = α × (RC + PFE)
+where α = 1.4 (bilateral) or 0.5 (cleared)
+```
+
+**2. Potential Future Exposure:**
+```
+PFE = Multiplier × Aggregate AddOn
+```
+
+**3. PFE Multiplier:**
+```
+Multiplier = min(1, 0.05 + 0.95 × exp(-0.05 × max(0, V) / AddOn))
+```
+
+**4. Replacement Cost (margined):**
+```
+RC = max(V - C, TH + MTA - NICA, 0)
+```
+
+**5. Maturity Factor:**
+```
+MF = min(1, 0.05 + 0.95 × exp(-0.05 × max(1, M)))
+```
+
+**6. Adjusted Notional:**
+```
+Adjusted Amount = Notional × |δ| × MF × SF
+```
+
+Where:
+• V = Net MTM, C = Collateral, TH = Threshold, MTA = Min Transfer Amount
+• δ = Supervisory delta, MF = Maturity factor, SF = Supervisory factor
+• M = Remaining maturity in years
+
+Need clarification on any specific formula?"""
+        
+        else:
+            return """I'm here to help with SA-CCR calculations and questions! I can assist with:
+
+**📊 Calculations**: Describe your trades and I'll calculate SA-CCR automatically
+**📚 Explanations**: Ask about specific SA-CCR concepts, formulas, or methodology  
+**🎯 Optimization**: Get strategies to reduce your capital requirements
+**🔍 Analysis**: Deep dive into calculation results and risk drivers
+
+**Example questions:**
+• "What's the difference between RC and PFE?"
+• "How does the maturity factor work?"
+• "Calculate SA-CCR for a $200M swap with Deutsche Bank"
+• "What are the best ways to optimize my derivatives capital?"
+
+What would you like to know about SA-CCR?"""
+        
+        return response
         """Render portfolio analysis page"""
         st.markdown("## Portfolio Analysis")
         st.info("Advanced portfolio analysis features coming soon...")
