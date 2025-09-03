@@ -356,7 +356,16 @@ class SACCRApplication:
                 'show_debug': False,
                 'decimal_places': 2
             },
-            'current_page': 'ai_assistant'  # Default to AI Assistant
+            'current_page': 'ai_assistant',  # Default to AI Assistant
+            'llm_settings': {
+                'provider': 'emergent',
+                'model': 'gpt-4',
+                'temperature': 0.7,
+                'max_tokens': 2000,
+                'response_style': 'professional',
+                'enable_context': True,
+                'show_calculations': True
+            }
         }
         
         for key, value in defaults.items():
