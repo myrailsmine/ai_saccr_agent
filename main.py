@@ -838,41 +838,94 @@ Would you like me to calculate SA-CCR for this imported portfolio now?"""
         st.rerun()
 
     def _generate_ai_response(self, query: str) -> str:
-        """Generate intelligent AI response based on query analysis"""
+        """Generate intelligent AI response based on query analysis and LLM settings"""
+        
+        # Update query count
+        st.session_state['ai_query_count'] = st.session_state.get('ai_query_count', 0) + 1
+        
+        # Get LLM settings
+        llm_settings = st.session_state.llm_settings
+        
+        # Add response style context
+        style_context = {
+            'professional': "Respond in a professional, business-appropriate tone with clear structure.",
+            'casual': "Use a friendly, conversational tone that's easy to understand.", 
+            'technical': "Provide detailed technical explanations with precise terminology.",
+            'educational': "Explain concepts step-by-step as if teaching a student."
+        }
+        
+        response_prefix = ""
+        if llm_settings.get('response_style') in style_context:
+            response_prefix = f"*{style_context[llm_settings['response_style']]}*\n\n"
+        
+        # Add custom prompt context if provided
+        if llm_settings.get('custom_prompt'):
+            response_prefix += f"*{llm_settings['custom_prompt']}*\n\n"
         
         query_lower = query.lower()
         
-        # Check for calculation requests
-        if any(word in query_lower for word in ['calculate', 'compute', 'saccr', 'portfolio']):
-            if st.session_state.current_portfolio:
-                return self._handle_calculation_request(query)
-            else:
-                return """**📊 SA-CCR Calculation Request**
+        # Track response generation time
+        import time
+        start_time = time.time()
+        
+        try:
+            # Check for calculation requests
+            if any(word in query_lower for word in ['calculate', 'compute', 'saccr', 'portfolio']):
+                if st.session_state.current_portfolio:
+                    response = self._handle_calculation_request(query)
+                else:
+                    response = """**📊 SA-CCR Calculation Request**
 
 I'd be happy to help you calculate SA-CCR! However, I don't see any portfolio data loaded.
 
 **🔹 Options to proceed:**
-1. **Upload Excel File**: Use the "Upload Excel Portfolio" button above
+1. **Upload Excel File**: Use the "Show Upload Interface" button below
 2. **Manual Entry**: Go to SA-CCR Calculator to add trades manually  
 3. **Sample Calculation**: I can create a sample portfolio to demonstrate
 
 Which option would you prefer?"""
-        
-        # Check for optimization queries
-        elif any(word in query_lower for word in ['optimize', 'reduce', 'minimize', 'capital']):
-            return self._handle_optimization_query(query)
-        
-        # Check for explanation requests
-        elif any(word in query_lower for word in ['explain', 'what is', 'how does']):
-            return self._handle_explanation_query(query)
-        
-        # Check for 24-step breakdown requests
-        elif '24' in query_lower and 'step' in query_lower:
-            return self._handle_step_breakdown_query()
-        
-        # Default helpful response
-        else:
-            return self._handle_general_query(query)
+            
+            # Check for optimization queries
+            elif any(word in query_lower for word in ['optimize', 'reduce', 'minimize', 'capital']):
+                response = self._handle_optimization_query(query)
+            
+            # Check for explanation requests
+            elif any(word in query_lower for word in ['explain', 'what is', 'how does']):
+                response = self._handle_explanation_query(query)
+            
+            # Check for 24-step breakdown requests
+            elif '24' in query_lower and 'step' in query_lower:
+                response = self._handle_step_breakdown_query()
+            
+            # Default helpful response
+            else:
+                response = self._handle_general_query(query)
+            
+            # Add response style prefix if enabled
+            final_response = response_prefix + response
+            
+            # Add calculation details if enabled
+            if llm_settings.get('show_calculations', True) and 'calculation' in query_lower:
+                final_response += "\n\n💡 *Detailed calculations and step-by-step breakdowns are available in the Scenario Comparison section.*"
+            
+            # Track response time
+            end_time = time.time()
+            response_time = end_time - start_time
+            
+            # Update average response time
+            current_avg = st.session_state.get('avg_response_time', 0)
+            query_count = st.session_state.get('ai_query_count', 1)
+            st.session_state['avg_response_time'] = ((current_avg * (query_count - 1)) + response_time) / query_count
+            
+            # Estimate tokens used (rough approximation)
+            estimated_tokens = len(final_response.split()) * 1.3  # Rough token estimation
+            st.session_state['ai_tokens_used'] = st.session_state.get('ai_tokens_used', 0) + int(estimated_tokens)
+            
+            return final_response
+            
+        except Exception as e:
+            error_response = f"❌ I encountered an error: {str(e)}\n\nPlease try rephrasing your question."
+            return response_prefix + error_response
 
     def _handle_calculation_request(self, query: str) -> str:
         """Handle calculation requests for existing portfolio"""
