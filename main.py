@@ -1130,7 +1130,7 @@ class SACCRApplication:
                 st.info("Voice input feature coming soon!")
     
     def _process_ai_query(self, user_query: str):
-        """Process user query and generate AI response with potential SA-CCR calculation"""
+        """Enhanced AI query processing with intelligent validation and mandatory input requests"""
         
         # Add user message to chat
         st.session_state.ai_chat_history.append({
@@ -1140,14 +1140,18 @@ class SACCRApplication:
         })
         
         try:
-            # Analyze query type
-            query_analysis = self._analyze_query_intent(user_query)
+            # Enhanced query analysis with validation
+            query_analysis = self._analyze_query_intent_enhanced(user_query)
             
-            # Generate response based on query type
-            if query_analysis['requires_calculation']:
-                response = self._handle_calculation_query(user_query, query_analysis)
+            # Check for mandatory missing information
+            missing_info = self._check_mandatory_information(query_analysis)
+            
+            if missing_info:
+                response = self._request_mandatory_information(missing_info, query_analysis)
+            elif query_analysis['requires_calculation']:
+                response = self._handle_calculation_query_enhanced(user_query, query_analysis)
             else:
-                response = self._handle_information_query(user_query, query_analysis)
+                response = self._handle_information_query_enhanced(user_query, query_analysis)
             
             # Add AI response to chat
             st.session_state.ai_chat_history.append({
@@ -1166,6 +1170,232 @@ class SACCRApplication:
             })
         
         st.rerun()
+    
+    def _analyze_query_intent_enhanced(self, query: str) -> Dict:
+        """Enhanced query analysis with better intelligence and context understanding"""
+        
+        query_lower = query.lower()
+        
+        # Enhanced calculation detection
+        calculation_keywords = [
+            'calculate', 'compute', 'sa-ccr for', 'portfolio', 'exposure',
+            'swap', 'forward', 'option', 'swaption', 'trade', 'notional', 
+            'ead', 'rwa', 'risk weight', 'capital', 'pfe', 'replacement cost'
+        ]
+        
+        # Enhanced query categorization
+        optimization_keywords = ['optimization', 'optimize', 'reduce', 'improve', 'minimize', 'lower', 'save capital']
+        explanation_keywords = ['explain', 'what is', 'how does', 'why', 'difference between', 'meaning of']
+        comparison_keywords = ['compare', 'versus', 'vs', 'difference', 'better', 'worse']
+        regulatory_keywords = ['basel', 'regulation', 'regulatory', 'compliance', 'requirement', 'rule']
+        
+        requires_calculation = any(keyword in query_lower for keyword in calculation_keywords)
+        
+        # Extract trade information with enhanced parsing
+        extracted_trades = self._extract_trade_information_enhanced(query)
+        
+        # Determine query category with multiple possible categories
+        categories = []
+        if any(keyword in query_lower for keyword in optimization_keywords):
+            categories.append('optimization')
+        if any(keyword in query_lower for keyword in explanation_keywords):
+            categories.append('explanation')
+        if any(keyword in query_lower for keyword in comparison_keywords):
+            categories.append('comparison')
+        if any(keyword in query_lower for keyword in regulatory_keywords):
+            categories.append('regulatory')
+        if requires_calculation and extracted_trades:
+            categories.append('calculation')
+        if not categories:
+            categories.append('general')
+        
+        # Enhanced context detection
+        context = self._detect_query_context(query_lower)
+        
+        return {
+            'requires_calculation': requires_calculation and len(extracted_trades) > 0,
+            'extracted_trades': extracted_trades,
+            'categories': categories,
+            'primary_category': categories[0] if categories else 'general',
+            'has_counterparty': bool(self._extract_counterparty(query)),
+            'counterparty': self._extract_counterparty(query),
+            'context': context,
+            'complexity_level': self._assess_query_complexity(query),
+            'user_intent': self._determine_user_intent(query, categories)
+        }
+    
+    def _detect_query_context(self, query_lower: str) -> Dict:
+        """Detect additional context from the query"""
+        
+        context = {
+            'has_portfolio_reference': 'portfolio' in query_lower or 'trades' in query_lower,
+            'mentions_specific_bank': any(bank in query_lower for bank in ['goldman', 'morgan', 'deutsche', 'barclays', 'citi']),
+            'mentions_currency': any(curr in query_lower for curr in ['usd', 'eur', 'gbp', 'jpy', 'chf']),
+            'mentions_timeframe': any(time in query_lower for time in ['year', 'month', 'day', 'maturity']),
+            'requests_explanation': any(word in query_lower for word in ['explain', 'how', 'why', 'what']),
+            'requests_example': 'example' in query_lower or 'show me' in query_lower,
+            'mentions_regulation': 'basel' in query_lower or 'regulation' in query_lower,
+            'urgency_indicators': any(word in query_lower for word in ['urgent', 'quickly', 'asap', 'immediately'])
+        }
+        
+        return context
+    
+    def _assess_query_complexity(self, query: str) -> str:
+        """Assess the complexity level of the user's query"""
+        
+        # Simple metrics for complexity assessment
+        word_count = len(query.split())
+        technical_terms = ['sa-ccr', 'pfe', 'ead', 'rwa', 'alpha', 'multiplier', 'netting', 'basel']
+        technical_count = sum(1 for term in technical_terms if term in query.lower())
+        
+        if word_count < 10 and technical_count == 0:
+            return 'basic'
+        elif word_count < 25 and technical_count <= 2:
+            return 'intermediate'
+        else:
+            return 'advanced'
+    
+    def _determine_user_intent(self, query: str, categories: List[str]) -> str:
+        """Determine the user's primary intent"""
+        
+        if 'calculation' in categories:
+            return 'wants_calculation'
+        elif 'optimization' in categories:
+            return 'seeks_optimization'
+        elif 'explanation' in categories:
+            return 'needs_explanation'
+        elif 'comparison' in categories:
+            return 'wants_comparison'
+        elif 'regulatory' in categories:
+            return 'needs_regulatory_guidance'
+        else:
+            return 'general_inquiry'
+    
+    def _check_mandatory_information(self, analysis: Dict) -> List[Dict]:
+        """Check for missing mandatory information in calculation requests"""
+        
+        missing_info = []
+        
+        if analysis['requires_calculation']:
+            trades = analysis['extracted_trades']
+            
+            for i, trade in enumerate(trades):
+                trade_missing = []
+                
+                # Check mandatory fields for each trade
+                if not trade.get('notional') or trade['notional'] == 0:
+                    trade_missing.append({
+                        'field': 'notional',
+                        'description': 'Notional amount',
+                        'example': '$100M or 100000000',
+                        'importance': 'critical'
+                    })
+                
+                if not trade.get('currency'):
+                    trade_missing.append({
+                        'field': 'currency',
+                        'description': 'Currency denomination',
+                        'example': 'USD, EUR, GBP, JPY',
+                        'importance': 'critical'
+                    })
+                
+                if not trade.get('maturity_years') or trade['maturity_years'] == 0:
+                    trade_missing.append({
+                        'field': 'maturity',
+                        'description': 'Time to maturity',
+                        'example': '5 years, 2.5 years, 18 months',
+                        'importance': 'critical'
+                    })
+                
+                if not trade.get('asset_class'):
+                    trade_missing.append({
+                        'field': 'asset_class',
+                        'description': 'Type of derivative',
+                        'example': 'Interest Rate Swap, FX Forward, Equity Option',
+                        'importance': 'critical'
+                    })
+                
+                # Optional but recommended fields
+                if trade.get('trade_type') in ['Option', 'Swaption'] and not trade.get('delta'):
+                    trade_missing.append({
+                        'field': 'delta',
+                        'description': 'Option delta (for options only)',
+                        'example': '0.6, -0.4, 0.8',
+                        'importance': 'recommended'
+                    })
+                
+                if trade_missing:
+                    missing_info.append({
+                        'trade_index': i + 1,
+                        'trade_id': trade.get('trade_id', f'Trade {i+1}'),
+                        'missing_fields': trade_missing
+                    })
+            
+            # Check for counterparty if not provided
+            if not analysis.get('counterparty'):
+                missing_info.append({
+                    'general': True,
+                    'field': 'counterparty',
+                    'description': 'Counterparty name',
+                    'example': 'Goldman Sachs, Deutsche Bank, JP Morgan',
+                    'importance': 'recommended'
+                })
+        
+        return missing_info
+    
+    def _request_mandatory_information(self, missing_info: List[Dict], analysis: Dict) -> str:
+        """Generate intelligent request for missing mandatory information"""
+        
+        response = "🤔 **I'd like to help you with that calculation, but I need some additional information:**\n\n"
+        
+        critical_missing = False
+        
+        for item in missing_info:
+            if item.get('general'):
+                # General missing information
+                field_info = item
+                if field_info['importance'] == 'critical':
+                    critical_missing = True
+                    response += f"❗ **{field_info['description']}** (Required)\n"
+                else:
+                    response += f"💡 **{field_info['description']}** (Recommended)\n"
+                response += f"   Example: {field_info['example']}\n\n"
+            else:
+                # Trade-specific missing information
+                trade_id = item['trade_id']
+                response += f"**📊 {trade_id}:**\n"
+                
+                for field_info in item['missing_fields']:
+                    if field_info['importance'] == 'critical':
+                        critical_missing = True
+                        response += f"   ❗ **{field_info['description']}** (Required)\n"
+                    else:
+                        response += f"   💡 **{field_info['description']}** (Recommended)\n"
+                    response += f"      Example: {field_info['example']}\n"
+                response += "\n"
+        
+        # Add guidance based on what's missing
+        if critical_missing:
+            response += "🚨 **Critical Information Missing**: I cannot perform the calculation without the required fields above.\n\n"
+        else:
+            response += "✅ **I can proceed with basic calculation**, but providing the recommended information will give you more accurate results.\n\n"
+        
+        # Add helpful suggestions
+        response += "💡 **How to provide the information:**\n"
+        response += "• You can say: \"For Trade 1, the notional is $200M USD with 5-year maturity\"\n"
+        response += "• Or: \"Update the swap: $500M EUR, 7 years, with Deutsche Bank\"\n"
+        response += "• Or provide all details in one message\n\n"
+        
+        # Offer to proceed with assumptions if only optional info is missing
+        if not critical_missing:
+            response += "🤖 **Would you like me to:**\n"
+            response += "• ▶️ Proceed with the calculation using reasonable assumptions\n"
+            response += "• ⏸️ Wait for you to provide the additional details\n"
+            response += "• 📝 Show you a template to fill in the missing information\n\n"
+        
+        response += "Just let me know how you'd like to proceed! 🚀"
+        
+        return response
     
     def _analyze_query_intent(self, query: str) -> Dict:
         """Analyze user query to determine intent and extract trade information"""
