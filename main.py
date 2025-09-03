@@ -13,6 +13,18 @@ from typing import Dict, List, Optional, Tuple
 import logging
 from pathlib import Path
 
+# LangChain imports for enterprise LLM
+try:
+    from langchain_community.chat_models import ChatOpenAI
+    from langchain.schema import HumanMessage, SystemMessage
+    from langchain.prompts import PromptTemplate
+    from langchain.chains import LLMChain
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("LangChain not available. AI features will be limited.")
+
 # Import our modular components
 from src.engine.saccr_engine import SACCREngine
 from src.data.database_manager import DatabaseManager
