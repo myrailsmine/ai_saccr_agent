@@ -1641,6 +1641,203 @@ class SACCRApplication:
         except Exception as e:
             return f"I encountered an error performing the SA-CCR calculation: {str(e)}\n\nPlease check your trade descriptions and try again. Make sure to include notional amounts, currencies, and maturities."
     
+    def _handle_calculation_query_enhanced(self, query: str, analysis: Dict) -> str:
+        """Enhanced calculation query handler with better error handling and context awareness"""
+        
+        try:
+            # Create trades from extracted information
+            trades = []
+            counterparty = analysis.get('counterparty', 'AI Generated Portfolio')
+            
+            for trade_info in analysis['extracted_trades']:
+                trade = Trade(
+                    trade_id=trade_info['trade_id'],
+                    counterparty=counterparty,
+                    asset_class=AssetClass(trade_info['asset_class']),
+                    trade_type=TradeType(trade_info['trade_type']),
+                    notional=trade_info['notional'],
+                    currency=trade_info['currency'],
+                    underlying=f"{trade_info['asset_class']} - {trade_info['trade_type']}",
+                    maturity_date=datetime.now() + timedelta(days=int(trade_info['maturity_years'] * 365)),
+                    mtm_value=trade_info['mtm_value'],
+                    delta=trade_info['delta']
+                )
+                trades.append(trade)
+            
+            # Create portfolio with enhanced parameters
+            portfolio_data = {
+                'netting_set_id': f"AI_NS_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                'counterparty': counterparty,
+                'threshold': 1000000.0,  # Default $1M threshold
+                'mta': 500000.0,  # Default $500K MTA
+                'trades': trades
+            }
+            
+            # Perform SA-CCR calculation
+            results = self.saccr_engine.calculate_comprehensive_saccr(portfolio_data)
+            
+            # Store results for potential further analysis
+            st.session_state.ai_generated_results = results
+            st.session_state.ai_generated_portfolio = portfolio_data
+            
+            # Enhanced response formatting based on context
+            final_results = results['final_results']
+            context = analysis.get('context', {})
+            complexity = analysis.get('complexity_level', 'balanced')
+            
+            # Build response based on complexity level
+            if complexity == 'basic':
+                response = self._format_basic_calculation_response(trades, final_results, counterparty)
+            elif complexity == 'advanced':
+                response = self._format_advanced_calculation_response(trades, final_results, counterparty, results)
+            else:
+                response = self._format_balanced_calculation_response(trades, final_results, counterparty, results)
+            
+            # Add context-aware suggestions
+            if context.get('mentions_regulation'):
+                response += "\n\n📋 **Regulatory Note**: This calculation follows Basel SA-CCR standards (BCBS 279) for counterparty credit risk."
+            
+            if context.get('urgency_indicators'):
+                response += "\n\n⚡ **Quick Summary**: EAD = ${:.1f}M, Capital = ${:.0f}K".format(
+                    final_results['exposure_at_default']/1_000_000,
+                    final_results['capital_requirement']/1_000
+                )
+            
+            return response
+            
+        except Exception as e:
+            error_context = analysis.get('context', {})
+            if error_context.get('urgency_indicators'):
+                return f"⚠️ **Quick Error**: Calculation failed - {str(e)}\n\nPlease provide: notional amount, currency, maturity, and trade type."
+            else:
+                return f"I encountered an error performing the SA-CCR calculation: {str(e)}\n\nPlease check your trade descriptions and try again. Make sure to include:\n• Notional amounts (e.g., $100M)\n• Currencies (e.g., USD, EUR)\n• Maturities (e.g., 5 years)\n• Trade types (e.g., swap, forward, option)"
+    
+    def _format_basic_calculation_response(self, trades, final_results, counterparty) -> str:
+        """Format basic calculation response for simple queries"""
+        
+        total_notional = sum(t.notional for t in trades)
+        ead_ratio = (final_results['exposure_at_default'] / total_notional) * 100
+        
+        response = f"""**✅ SA-CCR Calculation Complete!**
+
+**Your Portfolio:**
+• {len(trades)} trade(s) with {counterparty}
+• Total value: ${total_notional/1_000_000:.1f}M
+
+**Bottom Line:**
+• **Capital needed**: ${final_results['capital_requirement']/1_000:.0f}K
+• **Risk exposure**: ${final_results['exposure_at_default']/1_000_000:.1f}M ({ead_ratio:.1f}% of notional)
+
+**Key Insight**: """
+        
+        if ead_ratio < 10:
+            response += "Very efficient portfolio! Low capital requirements."
+        elif ead_ratio < 20:
+            response += "Good portfolio efficiency. Some optimization possible."
+        else:
+            response += "High capital requirements. Consider optimization strategies."
+        
+        response += "\n\n💡 Ask me about optimization strategies to reduce capital requirements!"
+        
+        return response
+    
+    def _format_balanced_calculation_response(self, trades, final_results, counterparty, results) -> str:
+        """Format balanced calculation response with moderate detail"""
+        
+        total_notional = sum(t.notional for t in trades)
+        
+        response = f"""**✅ SA-CCR Calculation Complete!**
+
+**Portfolio Summary:**
+• Counterparty: {counterparty}
+• Number of trades: {len(trades)}
+• Total notional: ${total_notional/1_000_000:.1f}M
+
+**Key Results:**
+• **Replacement Cost (RC)**: ${final_results['replacement_cost']/1_000_000:.2f}M
+• **Potential Future Exposure (PFE)**: ${final_results['potential_future_exposure']/1_000_000:.2f}M
+• **Exposure at Default (EAD)**: ${final_results['exposure_at_default']/1_000_000:.2f}M
+• **Capital Requirement**: ${final_results['capital_requirement']/1_000:.0f}K
+
+**Trade Breakdown:**
+"""
+        
+        for i, trade in enumerate(trades, 1):
+            response += f"• Trade {i}: {trade.asset_class.value} {trade.trade_type.value}, ${trade.notional/1_000_000:.1f}M {trade.currency}, {trade.time_to_maturity():.1f}Y\n"
+        
+        # Analysis
+        ead_ratio = (final_results['exposure_at_default'] / total_notional) * 100
+        response += f"\n**Risk Analysis:**\n"
+        response += f"• EAD/Notional ratio: {ead_ratio:.2f}%\n"
+        
+        if final_results['replacement_cost'] > final_results['potential_future_exposure']:
+            response += f"• Current exposure (RC) dominates - consider collateral management\n"
+        else:
+            response += f"• Future exposure (PFE) dominates - portfolio shows forward risk\n"
+        
+        response += f"\n**💡 Next Steps**: Ask about optimization strategies, clearing benefits, or detailed calculation breakdown!"
+        
+        return response
+    
+    def _format_advanced_calculation_response(self, trades, final_results, counterparty, results) -> str:
+        """Format advanced calculation response with technical details"""
+        
+        total_notional = sum(t.notional for t in trades)
+        calculation_steps = results.get('calculation_steps', [])
+        
+        response = f"""**✅ Advanced SA-CCR Analysis Complete**
+
+**Portfolio Composition:**
+• Counterparty: {counterparty}
+• Trades: {len(trades)} across {len(set(t.asset_class for t in trades))} asset class(es)
+• Gross notional: ${total_notional/1_000_000:.2f}M
+• Currencies: {', '.join(set(t.currency for t in trades))}
+
+**Detailed Results:**
+• **Replacement Cost (RC)**: ${final_results['replacement_cost']/1_000_000:.3f}M
+• **Potential Future Exposure (PFE)**: ${final_results['potential_future_exposure']/1_000_000:.3f}M
+• **Alpha Factor**: {final_results.get('alpha_factor', 1.4)}
+• **Exposure at Default (EAD)**: ${final_results['exposure_at_default']/1_000_000:.3f}M
+• **Risk-Weighted Assets**: ${final_results['risk_weighted_assets']/1_000_000:.3f}M
+• **Capital Requirement (8%)**: ${final_results['capital_requirement']/1_000:.1f}K
+
+**Technical Metrics:**
+"""
+        
+        # Add PFE multiplier if available
+        pfe_step = next((step for step in calculation_steps if step.get('step') == 15), None)
+        if pfe_step and 'data' in pfe_step:
+            multiplier = pfe_step['data'].get('multiplier', 'N/A')
+            response += f"• PFE Multiplier: {multiplier:.4f}\n"
+        
+        # Add aggregate add-on if available
+        addon_step = next((step for step in calculation_steps if step.get('step') == 13), None)
+        if addon_step and 'data' in addon_step:
+            aggregate_addon = addon_step['data'].get('aggregate_addon', 0)
+            response += f"• Aggregate Add-On: ${aggregate_addon/1_000_000:.3f}M\n"
+        
+        response += f"• EAD/Notional Ratio: {(final_results['exposure_at_default']/total_notional)*100:.3f}%\n"
+        response += f"• RC/EAD Contribution: {(final_results['replacement_cost']/final_results['exposure_at_default'])*100:.1f}%\n"
+        response += f"• PFE/EAD Contribution: {(final_results['potential_future_exposure']/final_results['exposure_at_default'])*100:.1f}%\n"
+        
+        response += f"\n**Trade-Level Analysis:**\n"
+        for i, trade in enumerate(trades, 1):
+            maturity = trade.time_to_maturity()
+            response += f"• T{i}: {trade.asset_class.value[:2]}-{trade.trade_type.value[:4]} | ${trade.notional/1_000_000:.1f}M {trade.currency} | {maturity:.2f}Y | δ={trade.delta:.2f}\n"
+        
+        response += f"\n**🔬 Technical Insights:**\n"
+        
+        # Optimization suggestions based on technical analysis
+        if final_results['replacement_cost'] > final_results['potential_future_exposure'] * 2:
+            response += "• High RC suggests collateral optimization opportunity\n"
+        
+        if pfe_step and pfe_step['data'].get('multiplier', 1) > 0.8:
+            response += "• High PFE multiplier indicates limited netting benefits\n"
+        
+        response += f"\n**📊 Available**: 24-step breakdown, optimization analysis, scenario comparisons"
+        
+        return response
+    
     def _handle_information_query_enhanced(self, query: str, analysis: Dict) -> str:
         """Enhanced information query handler with intelligent responses based on context"""
         
