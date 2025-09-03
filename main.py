@@ -597,6 +597,8 @@ class SACCRApplication:
         
         if page == 'calculator':
             self._render_calculator_page()
+        elif page == 'ai_assistant':
+            self._render_ai_assistant_page()
         elif page == 'portfolio':
             self._render_portfolio_page()
         elif page == 'optimization':
