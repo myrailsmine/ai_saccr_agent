@@ -470,14 +470,29 @@ class SACCRApplication:
                 self._process_ai_query(sample_query)
         
         with col2:
-            if st.button("📤 Upload Excel Portfolio", use_container_width=True):
-                st.session_state.show_excel_upload = True
-                st.rerun()
-        
-        with col3:
             if st.button("🎯 Optimization Help", use_container_width=True):
                 optimization_query = "How can I reduce my capital requirements through central clearing and netting optimization?"
                 self._process_ai_query(optimization_query)
+        
+        with col3:
+            if st.button("❓ Explain SA-CCR", use_container_width=True):
+                explanation_query = "What is SA-CCR and how does the 24-step calculation process work?"
+                self._process_ai_query(explanation_query)
+        
+        # Optional upload section - more subtle
+        st.markdown("---")
+        
+        with st.expander("📤 Optional: Upload Excel Portfolio", expanded=False):
+            st.markdown("""
+            **💡 Want to upload multiple trades at once?**
+            
+            You can upload an Excel file with your portfolio data for batch processing.
+            This is completely optional - you can also enter trades manually or just ask questions.
+            """)
+            
+            if st.button("📁 Show Upload Interface"):
+                st.session_state.show_excel_upload = True
+                st.rerun()
         
         # Excel Upload Section
         if st.session_state.get('show_excel_upload', False):
