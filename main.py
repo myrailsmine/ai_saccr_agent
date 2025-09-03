@@ -580,14 +580,11 @@ class SACCRApplication:
     def run(self):
         """Main application entry point"""
         
-        # Header
+        # Enhanced Professional Header
         st.markdown("""
-        <div style="background: white; padding: 2rem; border-radius: 8px; 
-                    border: 1px solid #e1e5e9; margin-bottom: 2rem;">
-            <h1 style="margin: 0; color: #1f2937;">SA-CCR Risk Analytics Platform</h1>
-            <p style="margin: 0.5rem 0 0 0; color: #6b7280;">
-                Professional Basel SA-CCR calculation and optimization engine
-            </p>
+        <div class="main-header">
+            <h1>🏦 SA-CCR Risk Analytics Platform</h1>
+            <p>Enterprise-grade Basel SA-CCR calculation and optimization engine with AI-powered insights</p>
         </div>
         """, unsafe_allow_html=True)
         
