@@ -614,6 +614,7 @@ class SACCRApplication:
         
         pages = {
             'calculator': '📊 SA-CCR Calculator',
+            'ai_assistant': '🤖 AI Assistant',
             'portfolio': '📈 Portfolio Analysis', 
             'optimization': '🎯 Optimization',
             'comparison': '⚖️ Scenario Comparison',
