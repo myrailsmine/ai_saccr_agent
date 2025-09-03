@@ -375,13 +375,22 @@ class SACCRApplication:
     def run(self):
         """Main application entry point"""
         
-        # Enhanced Professional Header
-        st.markdown("""
-        <div class="main-header">
-            <h1>🤖 AI SA-CCR Analytics Platform</h1>
-            <p>Intelligent Basel SA-CCR calculation and optimization with AI-powered insights</p>
-        </div>
-        """, unsafe_allow_html=True)
+        # Enhanced Professional Header with AI Settings
+        col1, col2 = st.columns([4, 1])
+        
+        with col1:
+            st.markdown("""
+            <div class="main-header">
+                <h1>🤖 AI SA-CCR Analytics Platform</h1>
+                <p>Intelligent Basel SA-CCR calculation and optimization with AI-powered insights</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            if st.button("⚙️ AI Settings", help="Configure AI Assistant settings"):
+                st.session_state.show_ai_settings = not st.session_state.get('show_ai_settings', False)
+                st.rerun()
         
         # Sidebar navigation
         with st.sidebar:
