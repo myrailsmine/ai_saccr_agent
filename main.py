@@ -468,6 +468,10 @@ class SACCRApplication:
         
         st.markdown('<div class="chat-container">', unsafe_allow_html=True)
         
+        # AI Settings Panel (if enabled)
+        if st.session_state.get('show_ai_settings', False):
+            self._render_ai_settings_panel()
+        
         # Welcome message and quick actions
         st.markdown("""
         <div class="alert alert-info">
