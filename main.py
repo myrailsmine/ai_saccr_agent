@@ -1641,56 +1641,157 @@ class SACCRApplication:
         except Exception as e:
             return f"I encountered an error performing the SA-CCR calculation: {str(e)}\n\nPlease check your trade descriptions and try again. Make sure to include notional amounts, currencies, and maturities."
     
-    def _handle_information_query(self, query: str, analysis: Dict) -> str:
-        """Handle informational queries about SA-CCR"""
+    def _handle_information_query_enhanced(self, query: str, analysis: Dict) -> str:
+        """Enhanced information query handler with intelligent responses based on context"""
         
         query_lower = query.lower()
+        categories = analysis['categories']
+        context = analysis['context']
+        complexity = analysis['complexity_level']
         
-        # SA-CCR methodology questions
-        if 'methodology' in query_lower or 'sa-ccr' in query_lower and ('what' in query_lower or 'explain' in query_lower):
-            return """**SA-CCR (Standardized Approach for Counterparty Credit Risk) Overview:**
-
-SA-CCR is the Basel III framework for calculating counterparty credit risk exposure for derivatives. It follows a comprehensive 24-step process:
-
-**Key Components:**
-1. **Replacement Cost (RC)**: Current exposure if counterparty defaults today
-2. **Potential Future Exposure (PFE)**: Potential exposure over the life of trades
-3. **Exposure at Default (EAD)**: Total regulatory exposure = Alpha × (RC + PFE)
-
-**Main Steps:**
-• **Steps 1-4**: Data preparation and classification
-• **Steps 5-13**: Add-on calculations (PFE components)
-• **Steps 14-18**: Current exposure and RC calculation
-• **Steps 19-24**: Final EAD and RWA calculation
-
-**Key Formula**: EAD = α × (RC + PFE)
-Where α = 1.4 for bilateral trades, 0.5 for centrally cleared
-
-Would you like me to explain any specific component in detail?"""
+        # Adjust response based on complexity level
+        if complexity == 'basic':
+            detail_level = "simplified"
+        elif complexity == 'advanced':
+            detail_level = "comprehensive"
+        else:
+            detail_level = "balanced"
         
-        # PFE Multiplier questions
-        elif 'pfe' in query_lower and 'multiplier' in query_lower:
-            return """**PFE Multiplier Explanation:**
-
-The PFE multiplier captures netting benefits within a netting set.
-
-**Formula**: Multiplier = min(1, 0.05 + 0.95 × exp(-0.05 × max(0, V) / AddOn))
-
-**Components:**
-• **V**: Net mark-to-market value of all trades
-• **AddOn**: Aggregate add-on (potential future exposure)
-• **Range**: 0.05 to 1.0
-
-**How it works:**
-• When V is negative (portfolio out-of-money): Multiplier approaches 0.05 (maximum netting benefit)
-• When V >> AddOn: Multiplier approaches 1.0 (minimal netting benefit)
-• Floor of 0.05 ensures some potential exposure is always recognized
-
-**Optimization tip**: Balance portfolio MTM through strategic hedging to maximize netting benefits!"""
+        # Handle regulatory queries
+        if 'regulatory' in categories:
+            return self._handle_regulatory_query(query_lower, detail_level, context)
         
-        # Optimization questions
-        elif 'optimization' in query_lower or 'reduce' in query_lower:
-            return """**🎯 SA-CCR Capital Optimization Strategies:**
+        # Handle optimization queries
+        elif 'optimization' in categories:
+            return self._handle_optimization_query(query_lower, detail_level, context)
+        
+        # Handle comparison queries
+        elif 'comparison' in categories:
+            return self._handle_comparison_query(query_lower, detail_level, context)
+        
+        # Handle SA-CCR methodology questions
+        elif 'methodology' in query_lower or ('sa-ccr' in query_lower and 'explain' in query_lower):
+            return self._explain_saccr_methodology(detail_level)
+        
+        # Handle specific formula questions
+        elif any(term in query_lower for term in ['pfe', 'multiplier', 'alpha', 'ead', 'formula']):
+            return self._explain_saccr_formulas(query_lower, detail_level)
+        
+        # Handle general questions with context awareness
+        else:
+            return self._handle_general_query(query_lower, detail_level, context)
+    
+    def _handle_regulatory_query(self, query_lower: str, detail_level: str, context: Dict) -> str:
+        """Handle regulatory and compliance questions"""
+        
+        if detail_level == "simplified":
+            return """**🏛️ Basel SA-CCR Regulatory Overview (Simplified)**
+
+SA-CCR is the global standard for measuring counterparty credit risk in derivatives trading, established by the Basel Committee.
+
+**Key Points:**
+• **Purpose**: Calculate how much capital banks need for derivatives risk
+• **Scope**: Applies to all derivatives (swaps, forwards, options)
+• **Implementation**: Required globally since 2017-2022
+• **Benefit**: Provides consistent risk measurement across institutions
+
+**Why it matters**: SA-CCR helps ensure banks have enough capital to survive if their derivatives counterparties default.
+
+Would you like me to explain any specific aspect in more detail?"""
+        
+        elif detail_level == "comprehensive":
+            return """**🏛️ Basel SA-CCR Regulatory Framework (Comprehensive)**
+
+**Regulatory Background:**
+• **Basel Committee on Banking Supervision (BCBS) 279** (March 2014)
+• **Implementation Timeline**: CRR II in EU (2019), US (2020-2022)
+• **Replaces**: Current Exposure Method (CEM) and Internal Model Method (IMM)
+
+**Regulatory Requirements:**
+• **Scope**: All OTC derivatives, exchange-traded derivatives, and long-settlement transactions
+• **Calculation Frequency**: At least monthly, daily for larger portfolios
+• **Documentation**: Full audit trail of calculations required
+• **Validation**: Annual validation of supervisory parameters
+
+**Compliance Considerations:**
+• **Data Requirements**: Trade-level data with full lifecycle tracking
+• **System Requirements**: Automated calculation systems with appropriate controls
+• **Governance**: Clear ownership, independent validation, management oversight
+• **Reporting**: Regular reporting to senior management and regulators
+
+**Supervisory Review:**
+• Regulators may challenge calculations and assumptions
+• Stress testing requirements for large portfolios
+• Model validation requirements for any internal adjustments
+
+Need guidance on specific compliance requirements for your jurisdiction?"""
+        
+        else:  # balanced
+            return """**🏛️ Basel SA-CCR Regulatory Framework**
+
+SA-CCR is the Basel Committee's standardized approach for measuring counterparty credit risk in derivatives.
+
+**Key Regulatory Aspects:**
+• **Legal Basis**: Basel Committee BCBS 279, implemented globally 2017-2022
+• **Mandatory Use**: Replaces older methods (CEM) for capital calculations
+• **Scope**: All derivatives including OTC, exchange-traded, and long-settlement
+
+**Implementation Requirements:**
+• Monthly calculation minimum (daily for large portfolios)
+• Complete trade-level data capture and storage
+• Automated systems with appropriate controls and governance
+• Regular validation and independent review
+
+**Supervisory Expectations:**
+• Robust data management and calculation processes
+• Clear documentation and audit trails
+• Senior management oversight and reporting
+• Stress testing for material portfolios
+
+**Benefits for Institutions:**
+• Risk-sensitive capital requirements
+• Recognition of netting and collateral benefits
+• Consistent methodology across counterparties
+
+Would you like me to explain implementation requirements for your specific situation?"""
+    
+    def _handle_optimization_query(self, query_lower: str, detail_level: str, context: Dict) -> str:
+        """Handle optimization and capital efficiency questions"""
+        
+        base_response = """**🎯 SA-CCR Capital Optimization Strategies**
+
+"""
+        
+        if 'central clearing' in query_lower:
+            base_response += """**Central Clearing Focus:**
+• **Alpha Reduction**: 1.4 → 0.5 (65% capital savings)
+• **Eligibility**: Check which trades can be centrally cleared
+• **Cost-Benefit**: Compare clearing costs vs capital savings
+• **Implementation**: CCP connectivity and operational setup
+
+"""
+        
+        if 'netting' in query_lower or 'portfolio' in query_lower:
+            base_response += """**Netting Optimization:**
+• **Master Agreements**: Consolidate trades under single agreements
+• **Portfolio Balancing**: Add offsetting trades to reduce net MTM
+• **PFE Multiplier**: Target multiplier reduction through hedging
+• **Currency Matching**: Align currencies within hedging sets
+
+"""
+        
+        if 'collateral' in query_lower:
+            base_response += """**Collateral Management:**
+• **High-Quality Assets**: Use cash or government bonds (0% haircut)
+• **Threshold Negotiation**: Lower thresholds reduce replacement cost
+• **Automation**: Implement automated margining systems
+• **Tri-Party Services**: Consider third-party collateral management
+
+"""
+        
+        # Add general strategies if not specific
+        if len(base_response) == len("**🎯 SA-CCR Capital Optimization Strategies**\n\n"):
+            base_response += """**Top Optimization Strategies:**
 
 **1. Central Clearing (Highest Impact)**
 • Move eligible trades to CCPs
@@ -1698,86 +1799,219 @@ The PFE multiplier captures netting benefits within a netting set.
 • Typically saves 50-70% capital
 
 **2. Netting Optimization**
-• Consolidate trades under master agreements
-• Balance long/short positions to reduce net MTM
-• Can reduce both RC and PFE multiplier
+• Consolidate under master agreements
+• Balance long/short positions
+• Strategic hedging to reduce net MTM
 
 **3. Collateral Management**
-• Post high-quality collateral to reduce RC
+• Post high-quality collateral
 • Negotiate lower thresholds and MTAs
-• Consider tri-party collateral arrangements
+• Automated margining systems
 
 **4. Portfolio Structure**
-• Diversify across asset classes (benefit from correlations)
-• Consider trade compression programs
-• Optimize maturity ladders
+• Diversify across asset classes
+• Optimize maturity profiles
+• Trade compression programs
 
-**5. Trade Structure**
-• Use shorter maturities where possible
-• Consider option structures vs linear trades
-• Optimize delta exposure
+**Expected Results**: Combined strategies typically achieve 40-70% capital reduction.
 
-**Expected Impact**: Combined strategies typically achieve 40-70% capital reduction.
-
-Want me to analyze a specific portfolio for optimization opportunities?"""
+"""
         
-        # Formula questions
-        elif 'formula' in query_lower or 'calculation' in query_lower:
-            return """**Key SA-CCR Formulas:**
+        if context.get('has_portfolio_reference'):
+            base_response += "💡 **For your specific portfolio**: I can analyze your current trades for optimization opportunities if you run a SA-CCR calculation first.\n\n"
+        
+        base_response += "Would you like me to dive deeper into any specific optimization strategy?"
+        
+        return base_response
+    
+    def _handle_comparison_query(self, query_lower: str, detail_level: str, context: Dict) -> str:
+        """Handle comparison questions between different approaches or scenarios"""
+        
+        if 'bilateral' in query_lower and 'cleared' in query_lower:
+            return """**⚖️ Bilateral vs Centrally Cleared Derivatives**
 
-**1. Exposure at Default:**
-```
-EAD = α × (RC + PFE)
-where α = 1.4 (bilateral) or 0.5 (cleared)
-```
+**Bilateral Derivatives:**
+• Alpha = 1.4 (higher capital requirement)
+• Direct counterparty risk
+• Bilateral collateral arrangements
+• More operational complexity
+• Greater flexibility in terms
 
-**2. Potential Future Exposure:**
-```
-PFE = Multiplier × Aggregate AddOn
-```
+**Centrally Cleared Derivatives:**
+• Alpha = 0.5 (65% lower capital requirement)
+• CCP intermediated (lower counterparty risk)
+• Standardized margining
+• Operational efficiencies
+• Limited product flexibility
 
-**3. PFE Multiplier:**
-```
-Multiplier = min(1, 0.05 + 0.95 × exp(-0.05 × max(0, V) / AddOn))
-```
+**Capital Impact Example:**
+• $100M bilateral swap → ~$14M EAD
+• $100M cleared swap → ~$5M EAD
+• **Capital savings**: ~65% reduction
 
-**4. Replacement Cost (margined):**
-```
-RC = max(V - C, TH + MTA - NICA, 0)
-```
+**When to Use Each:**
+• **Clearing**: Standardized, high-volume products
+• **Bilateral**: Bespoke, low-volume, or non-clearable products
 
-**5. Maturity Factor:**
-```
-MF = min(1, 0.05 + 0.95 × exp(-0.05 × max(1, M)))
-```
+Would you like me to analyze the clearing impact for a specific portfolio?"""
+        
+        elif 'pfe' in query_lower and ('rc' in query_lower or 'replacement cost' in query_lower):
+            return """**⚖️ PFE vs Replacement Cost (RC)**
 
-**6. Adjusted Notional:**
-```
-Adjusted Amount = Notional × |δ| × MF × SF
-```
+**Replacement Cost (RC):**
+• **What**: Current exposure if counterparty defaults today
+• **Formula**: RC = max(V - C, TH + MTA - NICA, 0)
+• **Components**: Current MTM, collateral, thresholds
+• **Nature**: Current, actual exposure
 
-Where:
-• V = Net MTM, C = Collateral, TH = Threshold, MTA = Min Transfer Amount
-• δ = Supervisory delta, MF = Maturity factor, SF = Supervisory factor
-• M = Remaining maturity in years
+**Potential Future Exposure (PFE):**
+• **What**: Potential exposure over remaining trade life
+• **Formula**: PFE = Multiplier × Aggregate AddOn
+• **Components**: Add-ons, multiplier, correlations
+• **Nature**: Forward-looking, potential exposure
 
-Need clarification on any specific formula?"""
+**Key Differences:**
+• **RC**: What you'd lose if counterparty defaulted today
+• **PFE**: What you might lose if they default in the future
+• **Optimization**: RC reduced by collateral, PFE by netting/clearing
+
+**Portfolio Impact:**
+• High RC: Focus on collateral management
+• High PFE: Focus on netting optimization or clearing
+
+**EAD Formula**: EAD = α × (RC + PFE)
+
+Would you like me to explain how to optimize each component?"""
         
         else:
-            return """I'm here to help with SA-CCR calculations and questions! I can assist with:
+            return """**⚖️ SA-CCR Comparison Analysis**
 
-**📊 Calculations**: Describe your trades and I'll calculate SA-CCR automatically
-**📚 Explanations**: Ask about specific SA-CCR concepts, formulas, or methodology  
-**🎯 Optimization**: Get strategies to reduce your capital requirements
-**🔍 Analysis**: Deep dive into calculation results and risk drivers
+I can help you compare different aspects of SA-CCR calculations:
 
-**Example questions:**
-• "What's the difference between RC and PFE?"
-• "How does the maturity factor work?"
-• "Calculate SA-CCR for a $200M swap with Deutsche Bank"
-• "What are the best ways to optimize my derivatives capital?"
+**Common Comparisons:**
+• **Bilateral vs Cleared**: Capital impact of central clearing
+• **RC vs PFE**: Current vs future exposure components  
+• **Asset Classes**: Risk factors across different products
+• **Optimization Strategies**: Effectiveness of different approaches
+• **Before/After Scenarios**: Impact of portfolio changes
 
-What would you like to know about SA-CCR?"""
+**Scenario Analysis Available:**
+• Central clearing impact
+• Collateral posting effects
+• Portfolio compression benefits
+• Netting optimization results
+
+What specific comparison would you like me to analyze for you?"""
+    
+    def _explain_saccr_methodology(self, detail_level: str) -> str:
+        """Explain SA-CCR methodology based on requested detail level"""
+        
+        if detail_level == "simplified":
+            return """**📚 SA-CCR Methodology (Simplified)**
+
+SA-CCR calculates how much capital banks need for derivatives risk in 3 main steps:
+
+**Step 1: Current Exposure (RC)**
+• How much would you lose if counterparty defaulted today?
+• Considers current trade values and collateral
+
+**Step 2: Future Exposure (PFE)**  
+• How much might you lose if they default later?
+• Based on trade types, sizes, and maturities
+
+**Step 3: Total Exposure (EAD)**
+• EAD = α × (RC + PFE)
+• α = 1.4 for bilateral trades, 0.5 for cleared trades
+
+**Why This Matters:**
+• Higher EAD = More capital required
+• Optimization reduces capital needs
+• Better risk management
+
+Want me to explain any step in more detail?"""
+        
+        elif detail_level == "comprehensive":
+            return """**📚 SA-CCR Methodology (Comprehensive Technical Overview)**
+
+SA-CCR implements a standardized approach across 24 detailed calculation steps:
+
+**Phase 1: Data Preparation (Steps 1-4)**
+• Netting set identification and trade classification
+• Asset class mapping per Basel regulatory tables
+• Hedging set definition by risk factors
+• Time parameter calculation (settlement, maturity, remaining life)
+
+**Phase 2: Risk Parameter Calculation (Steps 5-8)**
+• Adjusted notional calculation with trade-specific adjustments
+• Maturity factor: MF = min(1, 0.05 + 0.95 × exp(-0.05 × max(1, M)))
+• Supervisory delta determination (±1 for linear, calculated for options)
+• Supervisory factor application per Basel regulatory tables
+
+**Phase 3: Add-On Aggregation (Steps 9-13)**
+• Adjusted derivatives amount: Adj_Amount = Notional × |δ| × MF × SF
+• Supervisory correlation application by asset class
+• Hedging set add-on: HS_AddOn = Σ(Trade_AddOns) × √ρ
+• Asset class aggregation and final aggregate add-on calculation
+
+**Phase 4: Exposure Calculation (Steps 14-18)**
+• V and C calculation (MTM and collateral values)
+• PFE multiplier: min(1, 0.05 + 0.95 × exp(-0.05 × max(0, V) / AddOn))
+• PFE = Multiplier × Aggregate AddOn
+• Replacement cost calculation with collateral effects
+
+**Phase 5: Final Results (Steps 19-24)**
+• Central clearing status determination
+• Alpha application (1.4 bilateral, 0.5 cleared)
+• EAD = α × (RC + PFE)
+• Risk-weighted assets and capital requirement calculation
+
+**Advanced Features:**
+• Cross-asset correlation recognition
+• Margin period of risk adjustments
+• Collateral haircut applications
+• Basis and volatility trade adjustments
+
+This methodology ensures consistent, risk-sensitive capital calculations across all derivatives exposures."""
+        
+        else:  # balanced
+            return """**📚 SA-CCR Methodology Overview**
+
+SA-CCR calculates counterparty credit risk exposure through a comprehensive 24-step process:
+
+**Key Components:**
+
+**1. Replacement Cost (RC)**
+• Current exposure if counterparty defaults today
+• RC = max(V - C, TH + MTA - NICA, 0)
+• Considers current MTM values and posted collateral
+
+**2. Potential Future Exposure (PFE)**
+• Potential exposure over remaining trade life
+• PFE = Multiplier × Aggregate AddOn
+• Based on trade characteristics and netting benefits
+
+**3. Exposure at Default (EAD)**
+• Total regulatory exposure = α × (RC + PFE)
+• α = 1.4 for bilateral, 0.5 for centrally cleared
+
+**Calculation Process:**
+• **Steps 1-4**: Data preparation and classification
+• **Steps 5-13**: Add-on calculations for potential exposure
+• **Steps 14-18**: Current exposure and replacement cost
+• **Steps 19-24**: Final EAD and capital requirements
+
+**Key Features:**
+• Risk-sensitive to trade types and maturities
+• Recognizes netting and collateral benefits
+• Differentiates between bilateral and cleared trades
+• Consistent methodology across institutions
+
+**Benefits:**
+• More accurate risk measurement than previous methods
+• Incentivizes risk-reducing activities (clearing, netting)
+• Provides basis for regulatory capital requirements
+
+Would you like me to dive deeper into any specific component?"""
     
     def _render_portfolio_page(self):
         """Render portfolio analysis page"""
