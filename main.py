@@ -548,6 +548,10 @@ class SACCRApplication:
         self.validator = TradeValidator()
         self.progress_tracker = ProgressTracker()
         
+        # Initialize LLM connection status
+        self.llm_connection_status = "disconnected"
+        self.llm = None
+        
         # Initialize session state
         self._initialize_session_state()
         
