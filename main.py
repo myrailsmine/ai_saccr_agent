@@ -1397,6 +1397,266 @@ class SACCRApplication:
         
         return response
     
+    def _extract_trade_information_enhanced(self, query: str) -> List[Dict]:
+        """Enhanced trade information extraction with better parsing and validation"""
+        
+        import re
+        
+        trades = []
+        
+        # Enhanced patterns for monetary amounts
+        money_patterns = [
+            r'\$(\d+(?:,\d{3})*(?:\.\d+)?)\s*([KMB]?)\b',  # $100M, $50K
+            r'(\d+(?:,\d{3})*(?:\.\d+)?)\s*([KMB]?)\s*(?:USD|EUR|GBP|JPY|CHF|CAD|dollars?|euros?)',  # 100M USD
+            r'(\d+(?:,\d{3})*(?:\.\d+)?)\s*million',  # 100 million
+            r'(\d+(?:,\d{3})*(?:\.\d+)?)\s*billion'   # 1 billion
+        ]
+        
+        # Enhanced time patterns
+        time_patterns = [
+            r'(\d+(?:\.\d+)?)\s*[-\s]?\s*(year|yr)s?',
+            r'(\d+(?:\.\d+)?)\s*[-\s]?\s*(month|mon)s?',
+            r'(\d+(?:\.\d+)?)\s*[-\s]?\s*(day)s?',
+            r'(\d+(?:\.\d+)?)\s*Y\b',  # 5Y notation
+            r'(\d+)M\s*maturity'  # 18M maturity
+        ]
+        
+        # Enhanced currency patterns
+        currency_patterns = [
+            r'\b(USD|EUR|GBP|JPY|CHF|CAD|AUD|NZD|SEK|NOK)\b',
+            r'\b(US\s*Dollar|Euro|British\s*Pound|Japanese\s*Yen)\b'
+        ]
+        
+        # Enhanced asset type patterns with more specific matching
+        asset_patterns = {
+            'Interest Rate': [
+                r'\b(interest\s+rate\s+swap|irs|swap)\b',
+                r'\b(fixed\s+rate|floating\s+rate)\b',
+                r'\b(libor|sofr|euribor)\b'
+            ],
+            'Foreign Exchange': [
+                r'\b(fx\s+forward|fx|foreign\s+exchange|currency\s+forward)\b',
+                r'\b(USD/EUR|EUR/USD|GBP/USD|cross\s+currency)\b'
+            ],
+            'Equity': [
+                r'\b(equity\s+option|stock\s+option|equity)\b',
+                r'\b(option\s+on\s+S&P|S&P\s*500|index\s+option)\b',
+                r'\b(call\s+option|put\s+option)\b'
+            ],
+            'Credit': [
+                r'\b(cds|credit\s+default\s+swap|credit)\b',
+                r'\b(investment\s+grade|high\s+yield)\b'
+            ],
+            'Commodity': [
+                r'\b(commodity|oil|gold|wheat|energy)\b'
+            ]
+        }
+        
+        # Split query into potential trades
+        trade_separators = [r'[,;]\s*\d+\)', r'\band\s+', r'\bplus\s+', r'\balso\s+']
+        potential_trades = [query]
+        
+        for separator in trade_separators:
+            new_trades = []
+            for trade_text in potential_trades:
+                new_trades.extend(re.split(separator, trade_text, flags=re.IGNORECASE))
+            potential_trades = new_trades
+        
+        for i, trade_text in enumerate(potential_trades):
+            trade_info = {
+                'trade_id': f'AI_TRADE_{i+1}',
+                'notional': 100000000.0,  # Default $100M
+                'currency': 'USD',
+                'maturity_years': 5.0,
+                'asset_class': 'Interest Rate',
+                'trade_type': 'Swap',
+                'delta': 1.0,
+                'mtm_value': 0.0
+            }
+            
+            # Extract notional with enhanced patterns
+            notional_found = False
+            for pattern in money_patterns:
+                money_matches = re.findall(pattern, trade_text, re.IGNORECASE)
+                if money_matches:
+                    amount_str, multiplier = money_matches[0]
+                    amount = float(amount_str.replace(',', ''))
+                    
+                    # Handle multipliers
+                    multiplier_map = {
+                        'K': 1000, 'M': 1000000, 'B': 1000000000,
+                        'MILLION': 1000000, 'BILLION': 1000000000
+                    }
+                    
+                    if multiplier.upper() in multiplier_map:
+                        amount *= multiplier_map[multiplier.upper()]
+                    elif 'million' in trade_text.lower():
+                        amount *= 1000000
+                    elif 'billion' in trade_text.lower():
+                        amount *= 1000000000
+                    
+                    trade_info['notional'] = amount
+                    notional_found = True
+                    break
+            
+            # Extract currency with enhanced patterns
+            for pattern in currency_patterns:
+                currency_matches = re.findall(pattern, trade_text, re.IGNORECASE)
+                if currency_matches:
+                    currency = currency_matches[0].upper()
+                    # Normalize currency names
+                    currency_map = {
+                        'US DOLLAR': 'USD', 'EURO': 'EUR', 
+                        'BRITISH POUND': 'GBP', 'JAPANESE YEN': 'JPY'
+                    }
+                    trade_info['currency'] = currency_map.get(currency, currency)
+                    break
+            
+            # Extract maturity with enhanced patterns
+            maturity_found = False
+            for pattern in time_patterns:
+                time_matches = re.findall(pattern, trade_text, re.IGNORECASE)
+                if time_matches:
+                    if len(time_matches[0]) == 2:
+                        period, unit = time_matches[0]
+                        period = float(period)
+                        
+                        if unit.lower().startswith('year') or unit.lower().startswith('yr'):
+                            trade_info['maturity_years'] = period
+                        elif unit.lower().startswith('month') or unit.lower().startswith('mon'):
+                            trade_info['maturity_years'] = period / 12
+                        elif unit.lower().startswith('day'):
+                            trade_info['maturity_years'] = period / 365
+                        
+                        maturity_found = True
+                        break
+                    else:
+                        # Handle single value patterns like "5Y"
+                        period = float(time_matches[0])
+                        trade_info['maturity_years'] = period
+                        maturity_found = True
+                        break
+            
+            # Extract asset class and trade type with enhanced matching
+            asset_class_found = False
+            for asset_class, patterns in asset_patterns.items():
+                for pattern in patterns:
+                    if re.search(pattern, trade_text, re.IGNORECASE):
+                        trade_info['asset_class'] = asset_class
+                        
+                        # Set appropriate trade type
+                        if asset_class == 'Interest Rate':
+                            trade_info['trade_type'] = 'Swap'
+                        elif asset_class == 'Foreign Exchange':
+                            trade_info['trade_type'] = 'Forward'
+                        elif asset_class == 'Equity':
+                            trade_info['trade_type'] = 'Option'
+                            # Extract delta for options
+                            delta_pattern = r'delta\s+(\d+(?:\.\d+)?)'
+                            delta_match = re.search(delta_pattern, trade_text, re.IGNORECASE)
+                            if delta_match:
+                                trade_info['delta'] = float(delta_match.group(1))
+                        elif asset_class == 'Credit':
+                            trade_info['trade_type'] = 'Credit Default Swap'
+                        elif asset_class == 'Commodity':
+                            trade_info['trade_type'] = 'Forward'
+                        
+                        asset_class_found = True
+                        break
+                
+                if asset_class_found:
+                    break
+            
+            # Only add trade if we found meaningful information
+            if notional_found or maturity_found or asset_class_found:
+                trades.append(trade_info)
+        
+        # If no trades were extracted but the query suggests calculation intent
+        if not trades and any(word in query.lower() for word in ['calculate', 'sa-ccr', 'exposure', 'swap', 'trade']):
+            # Create default trade for calculation attempt
+            trades.append({
+                'trade_id': 'DEFAULT_TRADE',
+                'notional': 100000000.0,
+                'currency': 'USD',
+                'maturity_years': 5.0,
+                'asset_class': 'Interest Rate',
+                'trade_type': 'Swap',
+                'delta': 1.0,
+                'mtm_value': 0.0
+            })
+        
+        return trades
+    
+    def _handle_general_query(self, query_lower: str, detail_level: str, context: Dict) -> str:
+        """Handle general queries with context awareness"""
+        
+        greeting_words = ['hello', 'hi', 'hey', 'good morning', 'good afternoon']
+        if any(word in query_lower for word in greeting_words):
+            return """👋 **Hello! Welcome to the SA-CCR AI Assistant!**
+
+I'm here to help you with Basel SA-CCR calculations and portfolio optimization. I can assist with:
+
+🔹 **Automatic Calculations**: Just describe your trades in natural language
+🔹 **Expert Guidance**: Explain SA-CCR concepts and formulas  
+🔹 **Optimization Strategies**: Show you how to reduce capital requirements
+🔹 **Regulatory Compliance**: Provide Basel regulatory context
+
+**Quick Examples:**
+• "Calculate SA-CCR for a $200M USD swap with Goldman Sachs, 5-year maturity"
+• "How can I optimize my derivatives portfolio to save capital?"
+• "Explain the difference between RC and PFE"
+
+What would you like to know about SA-CCR today? 🚀"""
+        
+        help_words = ['help', 'guide', 'how to', 'getting started']
+        if any(word in query_lower for word in help_words):
+            return """📚 **SA-CCR Assistant Help Guide**
+
+**Getting Started:**
+1. **Quick Calculation**: Describe your trades and I'll calculate SA-CCR automatically
+2. **Ask Questions**: Ask about SA-CCR concepts, formulas, or optimization strategies
+3. **Get Recommendations**: I'll suggest ways to reduce your capital requirements
+
+**What I Can Calculate:**
+• Interest Rate Swaps, FX Forwards, Equity Options, Credit Default Swaps
+• Single trades or complex portfolios
+• Current exposure (RC) and potential future exposure (PFE)
+• Capital requirements and optimization opportunities
+
+**Example Queries:**
+• "Calculate exposure for $500M interest rate swap, 7 years, with Deutsche Bank"
+• "What's the impact of central clearing on my capital requirements?"
+• "Explain how the PFE multiplier works"
+• "Show me optimization strategies for my portfolio"
+
+**Tips for Best Results:**
+• Include notional amounts, currencies, and maturities
+• Mention counterparty names for more accurate analysis
+• Ask follow-up questions for deeper insights
+
+Ready to get started? Just describe your trades or ask any SA-CCR question! 💪"""
+        
+        # Default response for general queries
+        return """I'm your SA-CCR AI Assistant, ready to help with Basel counterparty credit risk calculations and portfolio optimization!
+
+**I can help you with:**
+
+📊 **Calculations**: Describe your derivatives trades and I'll calculate SA-CCR automatically
+📚 **Explanations**: Ask about specific SA-CCR concepts, formulas, or methodology  
+🎯 **Optimization**: Get strategies to reduce your capital requirements
+🔍 **Analysis**: Deep dive into calculation results and risk drivers
+⚖️ **Comparisons**: Compare different scenarios and optimization strategies
+🏛️ **Regulatory Guidance**: Basel compliance and regulatory context
+
+**Popular Topics:**
+• "What is SA-CCR and how does it work?"  
+• "Calculate SA-CCR for my derivatives portfolio"
+• "How can I reduce my capital requirements?"
+• "What's the difference between bilateral and cleared trades?"
+• "Explain the PFE multiplier formula"
+
+What specific aspect of SA-CCR would you like to explore? Just ask me anything! 🤖"""
+    
     def _analyze_query_intent(self, query: str) -> Dict:
         """Analyze user query to determine intent and extract trade information"""
         
