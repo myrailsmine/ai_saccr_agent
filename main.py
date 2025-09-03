@@ -1163,6 +1163,245 @@ I understand you're asking about: *"{query}"*
 
 What specific aspect would you like to explore? I'm here to make SA-CCR calculations simple and actionable!"""
 
+    def _render_ai_settings_panel(self):
+        """Render AI settings configuration panel"""
+        
+        st.markdown("---")
+        st.markdown("### ⚙️ AI Assistant Configuration")
+        
+        with st.expander("🤖 LLM Settings", expanded=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🔧 Model Configuration")
+                
+                # Provider selection
+                provider = st.selectbox(
+                    "AI Provider",
+                    options=["emergent", "openai", "anthropic", "google"],
+                    index=["emergent", "openai", "anthropic", "google"].index(
+                        st.session_state.llm_settings.get('provider', 'emergent')
+                    ),
+                    help="Choose your preferred AI provider"
+                )
+                
+                # Model selection based on provider
+                model_options = {
+                    'emergent': ['gpt-4', 'gpt-4-turbo', 'claude-3-sonnet', 'gemini-pro'],
+                    'openai': ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+                    'anthropic': ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
+                    'google': ['gemini-pro', 'gemini-pro-vision']
+                }
+                
+                model = st.selectbox(
+                    "Model",
+                    options=model_options.get(provider, ['gpt-4']),
+                    index=0 if st.session_state.llm_settings.get('model', 'gpt-4') not in model_options.get(provider, ['gpt-4']) 
+                          else model_options.get(provider, ['gpt-4']).index(st.session_state.llm_settings.get('model', 'gpt-4')),
+                    help="Select the specific model to use"
+                )
+                
+                # Temperature control
+                temperature = st.slider(
+                    "Creativity (Temperature)",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=st.session_state.llm_settings.get('temperature', 0.7),
+                    step=0.1,
+                    help="Higher values make responses more creative, lower values more focused"
+                )
+            
+            with col2:
+                st.markdown("#### 🎯 Response Configuration")
+                
+                # Max tokens
+                max_tokens = st.slider(
+                    "Response Length (Max Tokens)",
+                    min_value=500,
+                    max_value=4000,
+                    value=st.session_state.llm_settings.get('max_tokens', 2000),
+                    step=100,
+                    help="Maximum length of AI responses"
+                )
+                
+                # Response style
+                response_style = st.selectbox(
+                    "Response Style",
+                    options=["professional", "casual", "technical", "educational"],
+                    index=["professional", "casual", "technical", "educational"].index(
+                        st.session_state.llm_settings.get('response_style', 'professional')
+                    ),
+                    help="Preferred tone and style for AI responses"
+                )
+                
+                # Context settings
+                enable_context = st.checkbox(
+                    "Enable Conversation Context",
+                    value=st.session_state.llm_settings.get('enable_context', True),
+                    help="Remember previous conversation history"
+                )
+                
+                show_calculations = st.checkbox(
+                    "Show Detailed Calculations",
+                    value=st.session_state.llm_settings.get('show_calculations', True),
+                    help="Include step-by-step calculations in responses"
+                )
+        
+        # Advanced Settings
+        with st.expander("🔬 Advanced Settings", expanded=False):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🚀 Performance")
+                
+                streaming = st.checkbox(
+                    "Enable Streaming Responses",
+                    value=st.session_state.llm_settings.get('streaming', True),
+                    help="Stream responses as they're generated"
+                )
+                
+                cache_responses = st.checkbox(
+                    "Cache Similar Queries",
+                    value=st.session_state.llm_settings.get('cache_responses', True),
+                    help="Cache responses for faster repeated queries"
+                )
+            
+            with col2:
+                st.markdown("#### 🛡️ Safety & Limits")
+                
+                max_retries = st.number_input(
+                    "Max Retries on Error",
+                    min_value=1,
+                    max_value=5,
+                    value=st.session_state.llm_settings.get('max_retries', 3),
+                    help="Number of retries if API call fails"
+                )
+                
+                timeout = st.number_input(
+                    "Response Timeout (seconds)",
+                    min_value=10,
+                    max_value=120,
+                    value=st.session_state.llm_settings.get('timeout', 30),
+                    help="Maximum wait time for AI responses"
+                )
+        
+        # Custom Prompts
+        with st.expander("📝 Custom System Prompts", expanded=False):
+            st.markdown("#### 🎭 Customize AI Behavior")
+            
+            custom_prompt = st.text_area(
+                "System Prompt (Optional)",
+                value=st.session_state.llm_settings.get('custom_prompt', ''),
+                height=100,
+                placeholder="Add custom instructions for the AI assistant...",
+                help="Custom instructions to modify AI behavior (advanced users only)"
+            )
+            
+            preset_prompts = {
+                "Default": "",
+                "Conservative": "Be conservative and cautious in all risk assessments. Always mention regulatory compliance.",
+                "Detailed": "Provide extremely detailed explanations with step-by-step breakdowns for all calculations.",
+                "Business-Focused": "Focus on business implications and strategic recommendations for portfolio optimization.",
+                "Educational": "Explain concepts in an educational manner, suitable for someone learning SA-CCR for the first time."
+            }
+            
+            preset = st.selectbox(
+                "Quick Preset Prompts",
+                options=list(preset_prompts.keys()),
+                help="Select a preset prompt template"
+            )
+            
+            if preset != "Default" and st.button("📋 Apply Preset"):
+                st.session_state.llm_settings['custom_prompt'] = preset_prompts[preset]
+                st.success(f"✅ Applied {preset} preset")
+                st.rerun()
+        
+        # API Key Management (for non-emergent providers)
+        if provider != 'emergent':
+            with st.expander("🔑 API Key Configuration", expanded=False):
+                st.markdown("#### 🛡️ API Authentication")
+                st.warning("⚠️ API keys are stored locally for this session only")
+                
+                api_key = st.text_input(
+                    f"{provider.title()} API Key",
+                    type="password",
+                    value=st.session_state.llm_settings.get('api_key', ''),
+                    placeholder="Enter your API key...",
+                    help=f"Your {provider.title()} API key for authentication"
+                )
+                
+                if api_key:
+                    st.success("✅ API key configured")
+                else:
+                    st.info("💡 Using Emergent LLM Key is recommended for seamless experience")
+        
+        # Usage Statistics
+        with st.expander("📊 Usage Statistics", expanded=False):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Queries This Session",
+                    st.session_state.get('ai_query_count', 0)
+                )
+            
+            with col2:
+                st.metric(
+                    "Tokens Used",
+                    st.session_state.get('ai_tokens_used', 0)
+                )
+            
+            with col3:
+                avg_response_time = st.session_state.get('avg_response_time', 0)
+                st.metric(
+                    "Avg Response Time",
+                    f"{avg_response_time:.1f}s"
+                )
+        
+        # Save Settings
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("💾 Save Settings", type="primary", use_container_width=True):
+                st.session_state.llm_settings.update({
+                    'provider': provider,
+                    'model': model,
+                    'temperature': temperature,
+                    'max_tokens': max_tokens,
+                    'response_style': response_style,
+                    'enable_context': enable_context,
+                    'show_calculations': show_calculations,
+                    'streaming': streaming if 'streaming' in locals() else True,
+                    'cache_responses': cache_responses if 'cache_responses' in locals() else True,
+                    'max_retries': max_retries if 'max_retries' in locals() else 3,
+                    'timeout': timeout if 'timeout' in locals() else 30,
+                    'custom_prompt': custom_prompt if 'custom_prompt' in locals() else '',
+                    'api_key': api_key if 'api_key' in locals() else ''
+                })
+                st.success("✅ AI settings saved successfully!")
+                st.rerun()
+        
+        with col2:
+            if st.button("🔄 Reset to Defaults", use_container_width=True):
+                st.session_state.llm_settings = {
+                    'provider': 'emergent',
+                    'model': 'gpt-4',
+                    'temperature': 0.7,
+                    'max_tokens': 2000,
+                    'response_style': 'professional',
+                    'enable_context': True,
+                    'show_calculations': True
+                }
+                st.success("✅ Settings reset to defaults")
+                st.rerun()
+        
+        with col3:
+            if st.button("❌ Close Settings", use_container_width=True):
+                st.session_state.show_ai_settings = False
+                st.rerun()
+        
+        st.markdown("---")
+
     def _export_chat_history(self):
         """Export chat history"""
         try:
