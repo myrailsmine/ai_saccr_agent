@@ -1546,11 +1546,230 @@ Need clarification on any specific formula?"""
 • "What are the best ways to optimize my derivatives capital?"
 
 What would you like to know about SA-CCR?"""
-        
-        return response
+    
+    def _render_portfolio_page(self):
         """Render portfolio analysis page"""
         st.markdown("## Portfolio Analysis")
-        st.info("Advanced portfolio analysis features coming soon...")
+        
+        # Enhanced portfolio analysis interface
+        if not st.session_state.get('current_portfolio'):
+            st.info("🏦 **No portfolio loaded.** Please go to the Calculator page to create or load a portfolio first.")
+            return
+        
+        portfolio = st.session_state.current_portfolio
+        trades = portfolio.get('trades', [])
+        
+        # Portfolio Overview Section
+        st.markdown("### 📊 Portfolio Overview")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Trades", len(trades))
+        with col2:
+            total_notional = sum(abs(t.notional) for t in trades)
+            st.metric("Total Notional", f"${total_notional/1_000_000:.1f}M")
+        with col3:
+            asset_classes = len(set(t.asset_class for t in trades))
+            st.metric("Asset Classes", asset_classes)
+        with col4:
+            currencies = len(set(t.currency for t in trades))
+            st.metric("Currencies", currencies)
+        
+        # Analysis Tabs
+        analysis_tabs = st.tabs(["📈 Risk Metrics", "🎯 Asset Allocation", "📅 Maturity Profile", "💰 P&L Analysis"])
+        
+        with analysis_tabs[0]:
+            self._render_risk_metrics_analysis(trades)
+        
+        with analysis_tabs[1]:
+            self._render_asset_allocation_analysis(trades)
+        
+        with analysis_tabs[2]:
+            self._render_maturity_profile_analysis(trades)
+        
+        with analysis_tabs[3]:
+            self._render_pnl_analysis(trades)
+    
+    def _render_risk_metrics_analysis(self, trades):
+        """Render risk metrics analysis"""
+        st.markdown("#### Risk Metrics Dashboard")
+        
+        if st.session_state.get('calculation_results'):
+            results = st.session_state.calculation_results
+            final_results = results['final_results']
+            
+            # Risk metrics visualization
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # EAD breakdown pie chart
+                rc = final_results['replacement_cost']
+                pfe = final_results['potential_future_exposure']
+                
+                fig = go.Figure(data=[go.Pie(
+                    labels=['Replacement Cost', 'Potential Future Exposure'],
+                    values=[rc, pfe],
+                    hole=0.3,
+                    marker_colors=['#3b82f6', '#8b5cf6']
+                )])
+                
+                fig.update_layout(
+                    title="EAD Components Breakdown",
+                    height=300,
+                    showlegend=True
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                # Risk efficiency metrics
+                ead = final_results['exposure_at_default']
+                total_notional = sum(abs(t.notional) for t in trades)
+                efficiency_ratio = (1 - ead/total_notional) * 100 if total_notional > 0 else 0
+                
+                st.metric("Capital Efficiency", f"{efficiency_ratio:.1f}%", 
+                         help="Higher percentage indicates better capital efficiency")
+                st.metric("EAD/Notional Ratio", f"{(ead/total_notional)*100:.2f}%" if total_notional > 0 else "0%")
+                
+                # Risk recommendations
+                st.markdown("**💡 Risk Optimization Tips:**")
+                if rc > pfe:
+                    st.write("• Consider collateral posting to reduce current exposure")
+                if efficiency_ratio < 80:
+                    st.write("• Portfolio may benefit from netting optimization")
+                st.write("• Evaluate central clearing eligibility for capital relief")
+        else:
+            st.info("Run SA-CCR calculation first to see risk metrics.")
+    
+    def _render_asset_allocation_analysis(self, trades):
+        """Render asset allocation analysis"""
+        st.markdown("#### Asset Allocation Analysis")
+        
+        # Asset class breakdown
+        asset_data = {}
+        for trade in trades:
+            asset_class = trade.asset_class.value
+            if asset_class not in asset_data:
+                asset_data[asset_class] = {'count': 0, 'notional': 0}
+            asset_data[asset_class]['count'] += 1
+            asset_data[asset_class]['notional'] += abs(trade.notional)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Asset class by count
+            labels = list(asset_data.keys())
+            counts = [data['count'] for data in asset_data.values()]
+            
+            fig = go.Figure(data=[go.Pie(labels=labels, values=counts, hole=0.3)])
+            fig.update_layout(title="Trades by Asset Class", height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # Asset class by notional
+            notionals = [data['notional']/1_000_000 for data in asset_data.values()]
+            
+            fig = go.Figure(data=[go.Pie(labels=labels, values=notionals, hole=0.3)])
+            fig.update_layout(title="Notional by Asset Class ($M)", height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Detailed breakdown table
+        st.markdown("#### Detailed Asset Class Breakdown")
+        breakdown_data = []
+        for asset_class, data in asset_data.items():
+            breakdown_data.append({
+                'Asset Class': asset_class,
+                'Trade Count': data['count'],
+                'Total Notional ($M)': f"{data['notional']/1_000_000:.2f}",
+                'Avg Notional ($M)': f"{data['notional']/data['count']/1_000_000:.2f}",
+                'Percentage': f"{(data['notional']/sum(d['notional'] for d in asset_data.values()))*100:.1f}%"
+            })
+        
+        st.dataframe(pd.DataFrame(breakdown_data), use_container_width=True)
+    
+    def _render_maturity_profile_analysis(self, trades):
+        """Render maturity profile analysis"""
+        st.markdown("#### Maturity Profile Analysis")
+        
+        # Maturity buckets
+        maturity_buckets = {'<1Y': 0, '1-2Y': 0, '2-5Y': 0, '5-10Y': 0, '>10Y': 0}
+        maturity_notionals = {'<1Y': 0, '1-2Y': 0, '2-5Y': 0, '5-10Y': 0, '>10Y': 0}
+        
+        for trade in trades:
+            maturity = trade.time_to_maturity()
+            notional = abs(trade.notional)
+            
+            if maturity < 1:
+                bucket = '<1Y'
+            elif maturity < 2:
+                bucket = '1-2Y'
+            elif maturity < 5:
+                bucket = '2-5Y'
+            elif maturity < 10:
+                bucket = '5-10Y'
+            else:
+                bucket = '>10Y'
+            
+            maturity_buckets[bucket] += 1
+            maturity_notionals[bucket] += notional
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Maturity profile by count
+            fig = go.Figure(data=[
+                go.Bar(x=list(maturity_buckets.keys()), y=list(maturity_buckets.values()),
+                       marker_color='#06b6d4')
+            ])
+            fig.update_layout(title="Trade Count by Maturity Bucket", 
+                            xaxis_title="Maturity Bucket", yaxis_title="Number of Trades")
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # Maturity profile by notional
+            notional_values = [v/1_000_000 for v in maturity_notionals.values()]
+            fig = go.Figure(data=[
+                go.Bar(x=list(maturity_notionals.keys()), y=notional_values,
+                       marker_color='#8b5cf6')
+            ])
+            fig.update_layout(title="Notional by Maturity Bucket ($M)", 
+                            xaxis_title="Maturity Bucket", yaxis_title="Notional ($M)")
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Average maturity calculation
+        avg_maturity = sum(t.time_to_maturity() * abs(t.notional) for t in trades) / sum(abs(t.notional) for t in trades)
+        st.metric("Weighted Average Maturity", f"{avg_maturity:.2f} years")
+    
+    def _render_pnl_analysis(self, trades):
+        """Render P&L analysis"""
+        st.markdown("#### P&L Analysis")
+        
+        total_mtm = sum(t.mtm_value for t in trades)
+        positive_mtm = sum(t.mtm_value for t in trades if t.mtm_value > 0)
+        negative_mtm = sum(t.mtm_value for t in trades if t.mtm_value < 0)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total MTM", f"${total_mtm/1_000_000:.2f}M")
+        with col2:
+            st.metric("Positive MTM", f"${positive_mtm/1_000_000:.2f}M")
+        with col3:
+            st.metric("Negative MTM", f"${abs(negative_mtm)/1_000_000:.2f}M")
+        
+        # P&L distribution chart
+        pnl_data = [t.mtm_value/1_000_000 for t in trades]
+        trade_ids = [t.trade_id for t in trades]
+        
+        fig = go.Figure(data=[
+            go.Bar(x=trade_ids, y=pnl_data, 
+                   marker_color=['green' if x > 0 else 'red' for x in pnl_data])
+        ])
+        fig.update_layout(
+            title="Trade-Level P&L Distribution ($M)",
+            xaxis_title="Trade ID",
+            yaxis_title="MTM Value ($M)",
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
     
     def _render_optimization_page(self):
         """Render optimization analysis page"""
