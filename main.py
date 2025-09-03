@@ -2013,6 +2013,349 @@ SA-CCR calculates counterparty credit risk exposure through a comprehensive 24-s
 
 Would you like me to dive deeper into any specific component?"""
     
+    def _explain_saccr_formulas(self, query_lower: str, detail_level: str) -> str:
+        """Explain SA-CCR formulas based on query and detail level"""
+        
+        if 'pfe' in query_lower and 'multiplier' in query_lower:
+            if detail_level == "simplified":
+                return """**🔢 PFE Multiplier (Simplified)**
+
+The PFE multiplier reduces exposure when your portfolio is "out-of-the-money" (losing money).
+
+**Simple Formula**: Multiplier = between 0.05 and 1.0
+• **When portfolio loses money**: Multiplier closer to 0.05 (good for you!)
+• **When portfolio makes money**: Multiplier closer to 1.0 (less benefit)
+
+**Why it matters**: If your trades are losing money, you're less likely to lose more if the counterparty defaults.
+
+**Optimization tip**: Balance your portfolio so some trades lose money to get this benefit!"""
+            
+            elif detail_level == "comprehensive":
+                return """**🔢 PFE Multiplier (Technical)**
+
+**Full Formula**: 
+```
+Multiplier = min(1, 0.05 + 0.95 × exp(-0.05 × max(0, V) / AddOn))
+```
+
+**Technical Components:**
+• **V**: Net replacement value (sum of all positive MTMs minus negative MTMs)
+• **AddOn**: Aggregate add-on representing potential future exposure
+• **Floor**: 0.05 (5% minimum recognition of potential exposure)
+• **Ceiling**: 1.0 (100% of add-on when no netting benefit)
+
+**Mathematical Behavior:**
+• **V ≤ 0**: Multiplier approaches 0.05 (maximum netting benefit)
+• **V >> AddOn**: Multiplier approaches 1.0 (minimal netting benefit)
+• **Exponential decay**: Smooth transition between extremes
+
+**Regulatory Rationale:**
+• Recognizes that out-of-money portfolios have lower future exposure
+• Prevents over-recognition of netting benefits (5% floor)
+• Maintains risk sensitivity across different portfolio states
+
+**Optimization Applications:**
+• Portfolio rebalancing to achieve negative net MTM
+• Strategic hedging to optimize V/AddOn ratio
+• Trade structuring to maximize netting benefits"""
+            
+            else:  # balanced
+                return """**🔢 PFE Multiplier Formula**
+
+**Formula**: Multiplier = min(1, 0.05 + 0.95 × exp(-0.05 × max(0, V) / AddOn))
+
+**Key Components:**
+• **V**: Net mark-to-market value of all trades
+• **AddOn**: Aggregate add-on (potential future exposure)
+• **Range**: 0.05 to 1.0
+
+**How it Works:**
+• **Negative V** (portfolio out-of-money): Multiplier approaches 0.05
+• **Large positive V**: Multiplier approaches 1.0
+• **Floor of 0.05**: Ensures minimum exposure recognition
+
+**Business Impact:**
+• Lower multiplier = Lower capital requirements
+• Achieved through portfolio balancing and strategic hedging
+• Can significantly reduce PFE component of EAD
+
+**Optimization Strategy**: Balance portfolio MTM to achieve negative net value while maintaining business objectives."""
+        
+        elif any(term in query_lower for term in ['ead', 'exposure at default']):
+            return """**🔢 Exposure at Default (EAD) Formula**
+
+**Main Formula**: EAD = α × (RC + PFE)
+
+**Components:**
+• **α (Alpha)**: 1.4 for bilateral trades, 0.5 for cleared trades
+• **RC**: Replacement Cost (current exposure)
+• **PFE**: Potential Future Exposure
+
+**Alpha Impact:**
+• **Bilateral**: α = 1.4 (40% penalty for counterparty risk)
+• **Cleared**: α = 0.5 (50% reduction for CCP protection)
+• **Capital Impact**: Clearing can reduce EAD by ~65%
+
+**Calculation Flow:**
+1. Calculate current exposure (RC)
+2. Calculate potential future exposure (PFE)
+3. Apply alpha multiplier based on clearing status
+4. Result is regulatory exposure for capital calculation
+
+**Optimization Focus**: Maximize clearing eligibility to achieve α = 0.5"""
+        
+        elif 'replacement cost' in query_lower or 'rc' in query_lower:
+            return """**🔢 Replacement Cost (RC) Formulas**
+
+**For Margined Trades:**
+```
+RC = max(V - C, TH + MTA - NICA, 0)
+```
+
+**For Unmargined Trades:**
+```
+RC = max(V, 0)
+```
+
+**Components:**
+• **V**: Net MTM value of all trades in netting set
+• **C**: Posted collateral (haircut-adjusted)
+• **TH**: Threshold amount
+• **MTA**: Minimum Transfer Amount
+• **NICA**: Net Independent Collateral Amount
+
+**Key Insights:**
+• RC represents current exposure if counterparty defaults today
+• Collateral directly reduces RC (dollar-for-dollar after haircuts)
+• Thresholds and MTAs create minimum exposure levels
+• Cannot be negative (floor at zero)
+
+**Optimization**: Post high-quality collateral and negotiate lower thresholds"""
+        
+        else:
+            return """**🔢 Key SA-CCR Formulas**
+
+**1. Exposure at Default:**
+```
+EAD = α × (RC + PFE)
+where α = 1.4 (bilateral) or 0.5 (cleared)
+```
+
+**2. Potential Future Exposure:**
+```
+PFE = Multiplier × Aggregate AddOn
+```
+
+**3. PFE Multiplier:**
+```
+Multiplier = min(1, 0.05 + 0.95 × exp(-0.05 × max(0, V) / AddOn))
+```
+
+**4. Replacement Cost (margined):**
+```
+RC = max(V - C, TH + MTA - NICA, 0)
+```
+
+**5. Maturity Factor:**
+```
+MF = min(1, 0.05 + 0.95 × exp(-0.05 × max(1, M)))
+```
+
+**6. Adjusted Notional:**
+```
+Adjusted Amount = Notional × |δ| × MF × SF
+```
+
+Where:
+• V = Net MTM, C = Collateral, TH = Threshold, MTA = Min Transfer Amount
+• δ = Supervisory delta, MF = Maturity factor, SF = Supervisory factor
+• M = Remaining maturity in years
+
+Which formula would you like me to explain in detail?"""
+    
+    def _handle_general_query(self, query_lower: str, detail_level: str, context: Dict) -> str:
+        """Handle general SA-CCR questions with context awareness"""
+        
+        if context.get('requests_example'):
+            return """**📋 SA-CCR Examples**
+
+**Example 1: Simple Interest Rate Swap**
+• $100M USD 5-year swap with Goldman Sachs
+• Bilateral (α = 1.4), no collateral
+• Estimated EAD: ~$14M (14% of notional)
+
+**Example 2: Cleared Swap**
+• Same $100M swap but centrally cleared
+• Cleared (α = 0.5), daily margining
+• Estimated EAD: ~$5M (5% of notional)
+• **Capital savings**: 65% reduction!
+
+**Example 3: Multi-Asset Portfolio**
+• $200M IR swap + $150M FX forward + $100M equity option
+• Mixed bilateral/cleared, some collateral
+• Netting benefits reduce total exposure
+• Estimated EAD: ~$25M (vs $63M without netting)
+
+**Key Takeaway**: Clearing and netting provide substantial capital savings.
+
+Would you like me to calculate SA-CCR for your specific trades?"""
+        
+        elif any(word in query_lower for word in ['help', 'assist', 'support']):
+            return """**🤖 How I Can Help You**
+
+**📊 Automatic Calculations**
+• Describe your trades in plain English
+• I'll extract details and calculate SA-CCR
+• Get instant EAD, RWA, and capital requirements
+
+**📚 Expert Explanations**
+• SA-CCR methodology and formulas
+• Basel regulatory requirements
+• Technical concepts made simple
+
+**🎯 Optimization Guidance**
+• Capital reduction strategies
+• Portfolio restructuring advice
+• Clearing vs bilateral analysis
+
+**🔍 Deep Analysis**
+• Risk driver identification
+• Scenario comparisons
+• Regulatory compliance guidance
+
+**Example Questions:**
+• "Calculate SA-CCR for a $500M swap portfolio"
+• "How does central clearing reduce capital?"
+• "What's the difference between RC and PFE?"
+• "Optimize my derivatives portfolio"
+
+What specific area would you like help with?"""
+        
+        else:
+            return """**🤖 SA-CCR Expert Assistant**
+
+I'm here to help with all aspects of SA-CCR! I can assist with:
+
+**📊 Calculations**: Describe your trades and I'll calculate SA-CCR automatically
+**📚 Explanations**: Ask about specific SA-CCR concepts, formulas, or methodology  
+**🎯 Optimization**: Get strategies to reduce your capital requirements
+**🔍 Analysis**: Deep dive into calculation results and risk drivers
+
+**Popular Topics:**
+• Basel SA-CCR methodology and 24-step process
+• PFE multiplier and netting benefits
+• Central clearing vs bilateral comparison
+• Capital optimization strategies
+• Regulatory compliance requirements
+
+**Example Questions:**
+• "What's the difference between RC and PFE?"
+• "How does the maturity factor work?"
+• "Calculate SA-CCR for a $200M swap with Deutsche Bank"
+• "What are the best ways to optimize my derivatives capital?"
+
+What would you like to know about SA-CCR?"""
+    
+    def _extract_trade_information_enhanced(self, query: str) -> List[Dict]:
+        """Enhanced trade information extraction with better parsing"""
+        
+        import re
+        
+        trades = []
+        
+        # Enhanced patterns for better extraction
+        money_pattern = r'\$?(\d+(?:,\d{3})*(?:\.\d+)?)\s*([KMB]?)\b'
+        time_pattern = r'(\d+(?:\.\d+)?)\s*[-\s]?\s*(year|yr|month|mon|day)s?'
+        currency_pattern = r'\b(USD|EUR|GBP|JPY|CHF|CAD|AUD|NZD|SEK|NOK)\b'
+        
+        # Enhanced asset type patterns
+        asset_patterns = {
+            'Interest Rate': r'\b(interest\s+rate\s+swap|irs|swap|swaption)\b',
+            'Foreign Exchange': r'\b(fx\s+forward|fx|foreign\s+exchange|currency|cross.currency)\b',
+            'Equity': r'\b(equity\s+option|stock\s+option|equity|option\s+on|index\s+option)\b',
+            'Credit': r'\b(cds|credit\s+default\s+swap|credit)\b',
+            'Commodity': r'\b(commodity|oil|gold|wheat|energy)\b'
+        }
+        
+        # Split on common separators for multiple trades
+        trade_separators = r'[,;]\s*\d+\)|and\s+\d+\)|also\s+|plus\s+'
+        potential_trades = re.split(trade_separators, query)
+        
+        # If no clear separation, treat as single trade
+        if len(potential_trades) == 1:
+            potential_trades = [query]
+        
+        for i, trade_text in enumerate(potential_trades):
+            trade_info = {
+                'trade_id': f'AI_TRADE_{i+1}',
+                'notional': 100000000.0,  # Default $100M
+                'currency': 'USD',
+                'maturity_years': 5.0,
+                'asset_class': 'Interest Rate',
+                'trade_type': 'Swap',
+                'delta': 1.0,
+                'mtm_value': 0.0
+            }
+            
+            # Extract notional with enhanced parsing
+            money_matches = re.findall(money_pattern, trade_text, re.IGNORECASE)
+            if money_matches:
+                amount, multiplier = money_matches[0]
+                amount = float(amount.replace(',', ''))
+                
+                multiplier_map = {'K': 1000, 'M': 1000000, 'B': 1000000000}
+                if multiplier.upper() in multiplier_map:
+                    amount *= multiplier_map[multiplier.upper()]
+                
+                trade_info['notional'] = amount
+            
+            # Extract currency
+            currency_matches = re.findall(currency_pattern, trade_text, re.IGNORECASE)
+            if currency_matches:
+                trade_info['currency'] = currency_matches[0].upper()
+            
+            # Extract maturity with enhanced parsing
+            time_matches = re.findall(time_pattern, trade_text, re.IGNORECASE)
+            if time_matches:
+                period, unit = time_matches[0]
+                period = float(period)
+                
+                if unit.lower().startswith('year') or unit.lower().startswith('yr'):
+                    trade_info['maturity_years'] = period
+                elif unit.lower().startswith('month') or unit.lower().startswith('mon'):
+                    trade_info['maturity_years'] = period / 12
+                elif unit.lower().startswith('day'):
+                    trade_info['maturity_years'] = period / 365
+            
+            # Extract asset class and trade type with enhanced logic
+            for asset_class, pattern in asset_patterns.items():
+                if re.search(pattern, trade_text, re.IGNORECASE):
+                    trade_info['asset_class'] = asset_class
+                    
+                    if asset_class == 'Interest Rate':
+                        if 'swaption' in trade_text.lower():
+                            trade_info['trade_type'] = 'Swaption'
+                        else:
+                            trade_info['trade_type'] = 'Swap'
+                    elif asset_class == 'Foreign Exchange':
+                        trade_info['trade_type'] = 'Forward'
+                    elif asset_class == 'Equity':
+                        trade_info['trade_type'] = 'Option'
+                        # Extract delta if mentioned
+                        delta_pattern = r'delta\s+(\d+(?:\.\d+)?)'
+                        delta_match = re.search(delta_pattern, trade_text, re.IGNORECASE)
+                        if delta_match:
+                            trade_info['delta'] = float(delta_match.group(1))
+                    elif asset_class == 'Credit':
+                        trade_info['trade_type'] = 'Credit Default Swap'
+                    elif asset_class == 'Commodity':
+                        trade_info['trade_type'] = 'Commodity Swap'
+                    break
+            
+            trades.append(trade_info)
+        
+        return trades
+    
     def _render_portfolio_page(self):
         """Render portfolio analysis page"""
         st.markdown("## Portfolio Analysis")
