@@ -462,6 +462,21 @@ class SACCRApplication:
         else:
             st.markdown('<div class="alert alert-warning">⚠️ Config Issues</div>', 
                        unsafe_allow_html=True)
+        
+        # AI Settings Status
+        st.markdown("### 🤖 AI Assistant")
+        llm_settings = st.session_state.llm_settings
+        
+        st.markdown(f"""
+        **Provider**: {llm_settings.get('provider', 'emergent').title()}  
+        **Model**: {llm_settings.get('model', 'gpt-4')}  
+        **Style**: {llm_settings.get('response_style', 'professional').title()}
+        """)
+        
+        if st.button("⚙️ Configure AI", use_container_width=True):
+            st.session_state.current_page = 'ai_assistant'
+            st.session_state.show_ai_settings = True
+            st.rerun()
 
     def _render_ai_assistant_page(self):
         """Render enhanced Claude-like AI assistant interface"""
