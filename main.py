@@ -3951,7 +3951,7 @@ What would you like to know about SA-CCR?"""
                 }
                 
                 with st.spinner("Testing LLM connection..."):
-                    if self.setup_llm_connection(config):
+                    if self._setup_llm_connection(config):
                         st.success("✅ LLM Connected Successfully!")
                         st.info("You can now use the AI Assistant with full language model capabilities.")
                     else:
@@ -3966,12 +3966,8 @@ What would you like to know about SA-CCR?"""
             # Test query button
             if st.button("Test AI Response"):
                 try:
-                    from langchain.schema import HumanMessage, SystemMessage
-                    test_response = self.llm.invoke([
-                        SystemMessage(content="You are a helpful SA-CCR expert."),
-                        HumanMessage(content="Explain SA-CCR in one sentence.")
-                    ])
-                    st.write(f"**Test Response:** {test_response.content}")
+                    test_response = self._test_ai_response()
+                    st.write(f"**Test Response:** {test_response}")
                 except Exception as e:
                     st.error(f"Test failed: {str(e)}")
         else:
