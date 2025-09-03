@@ -1773,13 +1773,415 @@ What would you like to know about SA-CCR?"""
     
     def _render_optimization_page(self):
         """Render optimization analysis page"""
-        st.markdown("## Optimization Analysis")
-        st.info("What-if analysis and optimization features coming soon...")
+        st.markdown("## 🎯 Optimization Analysis")
+        
+        if not st.session_state.get('calculation_results'):
+            st.warning("🔄 **No calculation results available.** Please run a SA-CCR calculation first.")
+            return
+        
+        results = st.session_state.calculation_results
+        final_results = results['final_results']
+        
+        # Current metrics
+        st.markdown("### 📊 Current Portfolio Metrics")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Current EAD", f"${final_results['exposure_at_default']/1_000_000:.2f}M")
+        with col2:
+            st.metric("Current RWA", f"${final_results['risk_weighted_assets']/1_000_000:.2f}M")
+        with col3:
+            st.metric("Current Capital", f"${final_results['capital_requirement']/1_000:.0f}K")
+        with col4:
+            total_notional = final_results['portfolio_summary']['total_notional']
+            efficiency = (1 - final_results['exposure_at_default']/total_notional) * 100 if total_notional > 0 else 0
+            st.metric("Capital Efficiency", f"{efficiency:.1f}%")
+        
+        # Optimization strategies
+        st.markdown("### 🚀 Optimization Strategies")
+        
+        strategy_tabs = st.tabs(["🏛️ Central Clearing", "🔄 Netting Optimization", "💰 Collateral Management", "📈 Portfolio Restructuring"])
+        
+        with strategy_tabs[0]:
+            self._render_central_clearing_analysis(results)
+        
+        with strategy_tabs[1]:
+            self._render_netting_optimization_analysis(results)
+        
+        with strategy_tabs[2]:
+            self._render_collateral_management_analysis(results)
+        
+        with strategy_tabs[3]:
+            self._render_portfolio_restructuring_analysis(results)
+    
+    def _render_central_clearing_analysis(self, results):
+        """Render central clearing optimization analysis"""
+        st.markdown("#### Central Clearing Impact Analysis")
+        
+        current_ead = results['final_results']['exposure_at_default']
+        current_rwa = results['final_results']['risk_weighted_assets']
+        current_capital = results['final_results']['capital_requirement']
+        
+        # Simulate central clearing (Alpha reduction from 1.4 to 0.5)
+        clearing_ratio = 0.5 / 1.4  # ~0.357
+        cleared_ead = current_ead * clearing_ratio
+        cleared_rwa = current_rwa * clearing_ratio
+        cleared_capital = current_capital * clearing_ratio
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**💡 Central Clearing Benefits:**")
+            st.write(f"• **EAD Reduction**: ${(current_ead - cleared_ead)/1_000_000:.2f}M ({(1-clearing_ratio)*100:.0f}%)")
+            st.write(f"• **RWA Reduction**: ${(current_rwa - cleared_rwa)/1_000_000:.2f}M ({(1-clearing_ratio)*100:.0f}%)")
+            st.write(f"• **Capital Savings**: ${(current_capital - cleared_capital)/1_000:.0f}K ({(1-clearing_ratio)*100:.0f}%)")
+        
+        with col2:
+            # Before/After comparison chart
+            comparison_data = {
+                'Current': [current_ead/1_000_000, current_rwa/1_000_000, current_capital/1_000],
+                'With Central Clearing': [cleared_ead/1_000_000, cleared_rwa/1_000_000, cleared_capital/1_000]
+            }
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(name='Current', x=['EAD ($M)', 'RWA ($M)', 'Capital ($K)'], 
+                               y=comparison_data['Current'], marker_color='#ef4444'))
+            fig.add_trace(go.Bar(name='With Central Clearing', x=['EAD ($M)', 'RWA ($M)', 'Capital ($K)'], 
+                               y=comparison_data['With Central Clearing'], marker_color='#10b981'))
+            
+            fig.update_layout(title="Central Clearing Impact", barmode='group', height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("**📋 Implementation Steps:**")
+        st.write("1. **Eligibility Assessment**: Review trades for central clearing eligibility")
+        st.write("2. **CCP Selection**: Choose appropriate Central Counterparties")
+        st.write("3. **Documentation**: Update master agreements and confirmations")
+        st.write("4. **Operational Setup**: Establish CCP connectivity and processes")
+        st.write("5. **Migration**: Execute portfolio migration to central clearing")
+    
+    def _render_netting_optimization_analysis(self, results):
+        """Render netting optimization analysis"""
+        st.markdown("#### Netting Optimization Opportunities")
+        
+        # Analyze PFE multiplier for netting benefits
+        calculation_steps = results['calculation_steps']
+        pfe_step = next((step for step in calculation_steps if step['step'] == 15), None)
+        
+        if pfe_step and 'data' in pfe_step:
+            multiplier = pfe_step['data']['multiplier']
+            v_value = pfe_step['data']['v']
+            addon = pfe_step['data']['addon']
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric("Current PFE Multiplier", f"{multiplier:.4f}")
+                st.metric("Net MTM (V)", f"${v_value/1_000_000:.2f}M")
+                st.metric("Aggregate Add-On", f"${addon/1_000_000:.2f}M")
+            
+            with col2:
+                # Potential improvement through MTM balancing
+                if v_value > 0:
+                    # Simulate reducing MTM through hedging
+                    target_v = max(0, v_value * 0.5)  # 50% MTM reduction
+                    if addon > 0:
+                        improved_multiplier = min(1.0, 0.05 + 0.95 * math.exp(-0.05 * max(0, target_v) / addon))
+                        improvement = (multiplier - improved_multiplier) / multiplier * 100
+                        
+                        st.write("**🎯 Netting Optimization Potential:**")
+                        st.write(f"• Target Net MTM: ${target_v/1_000_000:.2f}M")
+                        st.write(f"• Improved Multiplier: {improved_multiplier:.4f}")
+                        st.write(f"• PFE Reduction: {improvement:.1f}%")
+                else:
+                    st.write("**✅ Portfolio already has optimal netting benefits**")
+        
+        st.markdown("**🔧 Netting Optimization Strategies:**")
+        st.write("• **Master Agreement Consolidation**: Combine trades under single agreements")
+        st.write("• **Strategic Hedging**: Add offsetting trades to reduce net MTM")
+        st.write("• **Portfolio Rebalancing**: Adjust trade sizes to optimize netting")
+        st.write("• **Currency Matching**: Align currencies within hedging sets")
+    
+    def _render_collateral_management_analysis(self, results):
+        """Render collateral management analysis"""
+        st.markdown("#### Collateral Management Optimization")
+        
+        # Analyze replacement cost impact
+        calculation_steps = results['calculation_steps']
+        rc_step = next((step for step in calculation_steps if step['step'] == 18), None)
+        
+        current_rc = results['final_results']['replacement_cost']
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("Current Replacement Cost", f"${current_rc/1_000_000:.2f}M")
+            
+            # Collateral impact scenarios
+            collateral_scenarios = [
+                ("No Additional Collateral", current_rc),
+                ("$10M Cash Collateral", max(0, current_rc - 10_000_000)),
+                ("$25M Cash Collateral", max(0, current_rc - 25_000_000)),
+                ("$50M Cash Collateral", max(0, current_rc - 50_000_000))
+            ]
+            
+            st.markdown("**💰 Collateral Impact Scenarios:**")
+            for scenario, rc_value in collateral_scenarios:
+                reduction = current_rc - rc_value
+                percentage = (reduction / current_rc) * 100 if current_rc > 0 else 0
+                st.write(f"• {scenario}: RC = ${rc_value/1_000_000:.2f}M ({percentage:.0f}% reduction)")
+        
+        with col2:
+            # Collateral efficiency chart
+            scenarios = [s[0] for s in collateral_scenarios]
+            rc_values = [s[1]/1_000_000 for s in collateral_scenarios]
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=scenarios, y=rc_values, marker_color='#06b6d4'))
+            fig.update_layout(
+                title="Replacement Cost by Collateral Scenario",
+                xaxis_title="Collateral Scenario",
+                yaxis_title="Replacement Cost ($M)",
+                height=300
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("**🏦 Collateral Management Best Practices:**")
+        st.write("• **High-Quality Assets**: Use cash or government bonds (lowest haircuts)")
+        st.write("• **Threshold Optimization**: Negotiate lower threshold amounts")
+        st.write("• **MTA Minimization**: Reduce minimum transfer amounts")
+        st.write("• **Tri-Party Arrangements**: Consider tri-party collateral management")
+        st.write("• **Automated Margining**: Implement automated collateral calls")
+    
+    def _render_portfolio_restructuring_analysis(self, results):
+        """Render portfolio restructuring analysis"""
+        st.markdown("#### Portfolio Restructuring Opportunities")
+        
+        portfolio = st.session_state.current_portfolio
+        trades = portfolio.get('trades', [])
+        
+        # Maturity analysis
+        long_maturity_trades = [t for t in trades if t.time_to_maturity() > 5]
+        short_maturity_impact = sum(abs(t.notional) for t in long_maturity_trades) * 0.1  # Estimate 10% reduction
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**📅 Maturity Optimization:**")
+            st.write(f"• Long-maturity trades (>5Y): {len(long_maturity_trades)}")
+            if long_maturity_trades:
+                avg_maturity = sum(t.time_to_maturity() for t in long_maturity_trades) / len(long_maturity_trades)
+                st.write(f"• Average maturity: {avg_maturity:.1f} years")
+                st.write(f"• Potential EAD reduction: ${short_maturity_impact/1_000_000:.1f}M")
+            
+            st.markdown("**🎯 Asset Class Diversification:**")
+            asset_classes = set(t.asset_class for t in trades)
+            st.write(f"• Current asset classes: {len(asset_classes)}")
+            if len(asset_classes) < 3:
+                st.write("• **Opportunity**: Add diversifying asset classes")
+            else:
+                st.write("• **Status**: Well diversified portfolio")
+        
+        with col2:
+            # Trade compression opportunities
+            st.markdown("**🔄 Trade Compression Analysis:**")
+            
+            # Group similar trades for compression analysis
+            compression_groups = {}
+            for trade in trades:
+                key = (trade.asset_class, trade.currency, trade.counterparty)
+                if key not in compression_groups:
+                    compression_groups[key] = []
+                compression_groups[key].append(trade)
+            
+            compressible_groups = {k: v for k, v in compression_groups.items() if len(v) > 1}
+            
+            st.write(f"• Trade groups: {len(compression_groups)}")
+            st.write(f"• Compressible groups: {len(compressible_groups)}")
+            
+            if compressible_groups:
+                compression_potential = sum(len(trades) - 1 for trades in compressible_groups.values())
+                st.write(f"• Trades that could be compressed: {compression_potential}")
+                st.write(f"• Estimated operational savings: High")
+        
+        st.markdown("**🚀 Restructuring Recommendations:**")
+        st.write("• **Maturity Laddering**: Replace long-term trades with shorter maturities")
+        st.write("• **Trade Compression**: Combine similar trades to reduce gross notional")
+        st.write("• **Novation Programs**: Transfer trades to optimize netting sets")
+        st.write("• **Basis Risk Management**: Use basis swaps to optimize correlations")
+        st.write("• **Option Strategies**: Replace linear products with options where appropriate")
     
     def _render_comparison_page(self):
         """Render scenario comparison page"""
-        st.markdown("## Scenario Comparison")
-        st.info("Before/after scenario comparison features coming soon...")
+        st.markdown("## ⚖️ Scenario Comparison")
+        
+        # Scenario comparison interface
+        st.markdown("### 🔬 Scenario Analysis Setup")
+        
+        if not st.session_state.get('calculation_results'):
+            st.warning("🔄 **No base calculation available.** Please run a SA-CCR calculation first.")
+            return
+        
+        base_results = st.session_state.calculation_results
+        
+        # Scenario definition
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### Base Scenario")
+            base_ead = base_results['final_results']['exposure_at_default'] / 1_000_000
+            base_rwa = base_results['final_results']['risk_weighted_assets'] / 1_000_000
+            base_capital = base_results['final_results']['capital_requirement'] / 1_000
+            
+            st.metric("EAD", f"${base_ead:.2f}M")
+            st.metric("RWA", f"${base_rwa:.2f}M")
+            st.metric("Capital Requirement", f"${base_capital:.0f}K")
+        
+        with col2:
+            st.markdown("#### Scenario Parameters")
+            
+            scenario_type = st.selectbox(
+                "Select Scenario Type:",
+                ["Central Clearing", "Collateral Posting", "Portfolio Compression", "Custom Alpha"]
+            )
+            
+            if scenario_type == "Central Clearing":
+                alpha_scenario = st.slider("Alpha Value", 0.5, 1.4, 0.5, 0.1)
+                scenario_description = f"Central clearing scenario (α = {alpha_scenario})"
+            
+            elif scenario_type == "Collateral Posting":
+                collateral_amount = st.number_input("Additional Collateral ($M)", 0.0, 100.0, 10.0)
+                scenario_description = f"Additional ${collateral_amount}M collateral posting"
+            
+            elif scenario_type == "Portfolio Compression":
+                compression_ratio = st.slider("Compression Ratio", 0.1, 1.0, 0.8, 0.1)
+                scenario_description = f"Portfolio compression ({compression_ratio*100:.0f}% remaining)"
+            
+            else:  # Custom Alpha
+                alpha_scenario = st.slider("Custom Alpha Value", 0.1, 3.0, 1.4, 0.1)
+                scenario_description = f"Custom alpha scenario (α = {alpha_scenario})"
+        
+        # Run scenario analysis
+        if st.button("🧮 Run Scenario Analysis", type="primary"):
+            with st.spinner("Running scenario analysis..."):
+                scenario_results = self._calculate_scenario(scenario_type, base_results, locals())
+                st.session_state.scenario_results = scenario_results
+                st.session_state.scenario_description = scenario_description
+        
+        # Display comparison results
+        if st.session_state.get('scenario_results'):
+            self._display_scenario_comparison(base_results, st.session_state.scenario_results, 
+                                            st.session_state.scenario_description)
+    
+    def _calculate_scenario(self, scenario_type, base_results, params):
+        """Calculate scenario results"""
+        base_final = base_results['final_results']
+        
+        if scenario_type == "Central Clearing":
+            alpha = params['alpha_scenario']
+            rc = base_final['replacement_cost']
+            pfe = base_final['potential_future_exposure']
+            scenario_ead = alpha * (rc + pfe)
+            scenario_rwa = scenario_ead * 1.0  # Assuming 100% risk weight
+            scenario_capital = scenario_rwa * 0.08
+        
+        elif scenario_type == "Collateral Posting":
+            collateral = params['collateral_amount'] * 1_000_000
+            scenario_rc = max(0, base_final['replacement_cost'] - collateral)
+            scenario_ead = 1.4 * (scenario_rc + base_final['potential_future_exposure'])
+            scenario_rwa = scenario_ead * 1.0
+            scenario_capital = scenario_rwa * 0.08
+        
+        elif scenario_type == "Portfolio Compression":
+            compression = params['compression_ratio']
+            scenario_pfe = base_final['potential_future_exposure'] * compression
+            scenario_ead = 1.4 * (base_final['replacement_cost'] + scenario_pfe)
+            scenario_rwa = scenario_ead * 1.0
+            scenario_capital = scenario_rwa * 0.08
+        
+        else:  # Custom Alpha
+            alpha = params['alpha_scenario']
+            rc = base_final['replacement_cost']
+            pfe = base_final['potential_future_exposure']
+            scenario_ead = alpha * (rc + pfe)
+            scenario_rwa = scenario_ead * 1.0
+            scenario_capital = scenario_rwa * 0.08
+        
+        return {
+            'exposure_at_default': scenario_ead,
+            'risk_weighted_assets': scenario_rwa,
+            'capital_requirement': scenario_capital,
+            'replacement_cost': scenario_rc if scenario_type == "Collateral Posting" else base_final['replacement_cost'],
+            'potential_future_exposure': scenario_pfe if scenario_type == "Portfolio Compression" else base_final['potential_future_exposure']
+        }
+    
+    def _display_scenario_comparison(self, base_results, scenario_results, description):
+        """Display scenario comparison analysis"""
+        st.markdown("### 📊 Scenario Comparison Results")
+        st.markdown(f"**Scenario**: {description}")
+        
+        base_final = base_results['final_results']
+        
+        # Metrics comparison
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            base_ead = base_final['exposure_at_default'] / 1_000_000
+            scenario_ead = scenario_results['exposure_at_default'] / 1_000_000
+            delta_ead = scenario_ead - base_ead
+            st.metric("EAD ($M)", f"{scenario_ead:.2f}", f"{delta_ead:+.2f}")
+        
+        with col2:
+            base_rwa = base_final['risk_weighted_assets'] / 1_000_000
+            scenario_rwa = scenario_results['risk_weighted_assets'] / 1_000_000
+            delta_rwa = scenario_rwa - base_rwa
+            st.metric("RWA ($M)", f"{scenario_rwa:.2f}", f"{delta_rwa:+.2f}")
+        
+        with col3:
+            base_capital = base_final['capital_requirement'] / 1_000
+            scenario_capital = scenario_results['capital_requirement'] / 1_000
+            delta_capital = scenario_capital - base_capital
+            st.metric("Capital ($K)", f"{scenario_capital:.0f}", f"{delta_capital:+.0f}")
+        
+        # Visual comparison
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Side-by-side comparison chart
+            metrics = ['EAD ($M)', 'RWA ($M)', 'Capital ($K)']
+            base_values = [base_ead, base_rwa, base_capital]
+            scenario_values = [scenario_ead, scenario_rwa, scenario_capital]
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(name='Base Scenario', x=metrics, y=base_values, marker_color='#6b7280'))
+            fig.add_trace(go.Bar(name='New Scenario', x=metrics, y=scenario_values, marker_color='#3b82f6'))
+            
+            fig.update_layout(
+                title="Scenario Comparison",
+                barmode='group',
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # Impact analysis
+            st.markdown("#### 📈 Impact Analysis")
+            
+            ead_change = ((scenario_ead - base_ead) / base_ead) * 100 if base_ead > 0 else 0
+            rwa_change = ((scenario_rwa - base_rwa) / base_rwa) * 100 if base_rwa > 0 else 0
+            capital_change = ((scenario_capital - base_capital) / base_capital) * 100 if base_capital > 0 else 0
+            
+            st.write(f"**EAD Change**: {ead_change:+.1f}%")
+            st.write(f"**RWA Change**: {rwa_change:+.1f}%")
+            st.write(f"**Capital Change**: {capital_change:+.1f}%")
+            
+            if capital_change < -10:
+                st.success("🎉 **Excellent**: Significant capital savings!")
+            elif capital_change < -5:
+                st.info("👍 **Good**: Moderate capital reduction")
+            elif capital_change > 10:
+                st.warning("⚠️ **Caution**: Capital requirement increases")
+            else:
+                st.info("📊 **Neutral**: Minimal capital impact")
     
     def _render_database_page(self):
         """Render database management page"""
