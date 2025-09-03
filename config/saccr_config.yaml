@@ -1,0 +1,29 @@
+database:
+  auto_backup: true
+  backup_frequency_hours: 24
+  backup_path: backups/
+  cleanup_days: 90
+  connection_pool_size: 5
+  db_path: data/saccr.duckdb
+  query_timeout_seconds: 30
+saccr:
+  alpha_bilateral: 1.4
+  alpha_centrally_cleared: 0.5
+  cache_expiry_hours: 24
+  capital_ratio: 0.08
+  delta_tolerance: 0.001
+  enable_calculation_cache: true
+  max_maturity_years: 50.0
+  max_portfolio_size: 10000
+  min_maturity_years: 0.01
+  notional_tolerance: 0.01
+  pfe_multiplier_decay: 0.05
+  pfe_multiplier_floor: 0.05
+ui:
+  auto_refresh: false
+  currency_format: USD
+  date_format: '%Y-%m-%d'
+  decimal_places: 2
+  show_debug_info: false
+  show_step_details: true
+  theme: professional
