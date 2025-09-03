@@ -1630,48 +1630,8 @@ What would you like to explore today? 🚀""",
             st.error(f"❌ Export failed: {str(e)}")
     
     def _render_chat_interface(self):
-        """Render the chat interface"""
-        
-        # Display chat history
-        chat_container = st.container()
-        with chat_container:
-            for message in st.session_state.ai_chat_history:
-                if message['role'] == 'user':
-                    st.markdown(f"""
-                    <div style="background: #f0f2f6; padding: 1rem; border-radius: 10px; margin: 0.5rem 0; margin-left: 2rem;">
-                        <strong>👤 You:</strong><br>
-                        {message['content']}
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div style="background: white; border: 1px solid #e1e5e9; padding: 1rem; border-radius: 10px; margin: 0.5rem 0; margin-right: 2rem;">
-                        <strong>🤖 SA-CCR Assistant:</strong><br>
-                        {message['content']}
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        # Chat input
-        st.markdown("### Your Question")
-        
-        # Use form for better UX
-        with st.form("chat_form", clear_on_submit=True):
-            user_input = st.text_area(
-                "Ask about SA-CCR or describe your portfolio:",
-                placeholder="e.g., 'Calculate SA-CCR for a $100M interest rate swap with Bank XYZ' or 'What is the PFE multiplier formula?'",
-                height=100
-            )
-            
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                submitted = st.form_submit_button("Send Message", type="primary", use_container_width=True)
-            with col2:
-                voice_mode = st.form_submit_button("🎤 Voice Input", use_container_width=True)
-            
-            if submitted and user_input.strip():
-                self._process_ai_query(user_input.strip())
-            elif voice_mode:
-                st.info("Voice input feature coming soon!")
+        """Legacy chat interface method - now redirects to enhanced version"""
+        self._render_enhanced_chat_interface()
     
     def _process_ai_query(self, user_query: str):
         """Enhanced AI query processing with intelligent validation and mandatory input requests"""
