@@ -1419,60 +1419,215 @@ class SACCRApplication:
                                unsafe_allow_html=True)
     
     def _render_ai_assistant_page(self):
-        """Render AI assistant chat interface with SA-CCR calculation capabilities"""
+        """Render enhanced AI assistant chat interface with SA-CCR calculation capabilities"""
         
         st.markdown("## 🤖 AI SA-CCR Assistant")
-        st.markdown("Ask me anything about SA-CCR calculations, or describe your portfolio for automatic calculation!")
+        st.markdown("""
+        <div class="alert-info">
+            <strong>🚀 Welcome to your intelligent SA-CCR assistant!</strong><br>
+            Ask me anything about SA-CCR calculations, describe your trades for automatic calculation, 
+            or get expert guidance on portfolio optimization and Basel regulations.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Quick action buttons at the top
+        st.markdown("### 🎯 Quick Examples")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("📊 Sample Calculation", use_container_width=True, help="Calculate SA-CCR for a sample portfolio"):
+                sample_query = "Calculate SA-CCR for a $500M USD interest rate swap with Goldman Sachs, 7-year maturity, plus a $200M EUR FX forward with Deutsche Bank, 2-year maturity"
+                self._process_ai_query(sample_query)
+        
+        with col2:
+            if st.button("🎯 Optimization Help", use_container_width=True, help="Get capital optimization strategies"):
+                optimization_query = "I have a large derivatives portfolio. How can I reduce my capital requirements by 30% through central clearing and netting optimization?"
+                self._process_ai_query(optimization_query)
+        
+        with col3:
+            if st.button("📚 SA-CCR Basics", use_container_width=True, help="Learn about SA-CCR methodology"):
+                basics_query = "Explain the SA-CCR methodology and the key differences between RC and PFE components"
+                self._process_ai_query(basics_query)
         
         # Initialize chat history
         if 'ai_chat_history' not in st.session_state:
             st.session_state.ai_chat_history = [
                 {
                     'role': 'assistant',
-                    'content': """Hello! I'm your SA-CCR expert assistant. I can help you with:
+                    'content': """**👋 Hello! I'm your SA-CCR expert assistant.**
 
-**📊 Automatic Calculations**: Describe your trades and I'll calculate SA-CCR automatically
-**❓ SA-CCR Questions**: Ask about Basel regulations, formulas, or methodology
-**🎯 Optimization**: Get suggestions to reduce capital requirements
-**📈 Analysis**: Analyze your calculation results
+I can help you with:
 
-**Example queries:**
-- "Calculate SA-CCR for a $100M USD interest rate swap with JP Morgan, 5-year maturity"
-- "What's the difference between PFE and RC in SA-CCR?"
-- "I have 3 FX forwards with Deutsche Bank, each $50M, can you calculate the exposure?"
-- "How can I optimize my derivatives portfolio to reduce capital?"
-""",
+🔹 **Automatic Calculations**: Just describe your trades in natural language
+   *Example: "Calculate SA-CCR for a $200M USD swap with JPMorgan, 5-year maturity"*
+
+🔹 **Portfolio Optimization**: Get strategies to reduce capital requirements
+   *Example: "How can I optimize my $2B derivatives portfolio for lower capital?"*
+
+🔹 **Regulatory Guidance**: Basel III SA-CCR questions and compliance
+   *Example: "What's the impact of central clearing on my alpha multiplier?"*
+
+🔹 **Risk Analysis**: Deep insights into your calculation results
+   *Example: "Analyze my portfolio's PFE multiplier and suggest improvements"*
+
+**💡 Pro Tips:**
+• Include notional amounts, currencies, maturities, and counterparties for best results
+• Ask follow-up questions for deeper insights
+• Request specific optimization strategies based on your needs
+
+What would you like to explore today? 🚀""",
                     'timestamp': datetime.now()
                 }
             ]
         
-        # Chat interface
-        self._render_chat_interface()
+        # Enhanced chat interface
+        self._render_enhanced_chat_interface()
         
-        # Quick action buttons
-        st.markdown("### Quick Actions")
+        # Add example templates section
+        st.markdown("---")
+        st.markdown("### 📝 Example Query Templates")
         
-        col1, col2, col3, col4 = st.columns(4)
+        examples_tab1, examples_tab2, examples_tab3 = st.columns(3)
         
-        with col1:
-            if st.button("💡 Sample Portfolio", use_container_width=True):
-                sample_query = "Calculate SA-CCR for a portfolio with: 1) $200M USD interest rate swap with Goldman Sachs, 7-year maturity, 2) $150M EUR/USD FX forward with Deutsche Bank, 1-year maturity, 3) $100M equity option on S&P500 with Morgan Stanley, 6-month maturity, delta 0.6"
-                self._process_ai_query(sample_query)
+        with examples_tab1:
+            st.markdown("**💼 Calculation Examples:**")
+            calculation_examples = [
+                "Calculate SA-CCR for a $100M interest rate swap, 5 years",
+                "What's the EAD for a $50M FX forward with Deutsche Bank?",
+                "Compute RWA for my equity options portfolio worth $300M"
+            ]
+            for example in calculation_examples:
+                if st.button(f"📊 {example[:30]}...", key=f"calc_{hash(example)}", help=example):
+                    self._process_ai_query(example)
         
-        with col2:
-            if st.button("❓ SA-CCR Basics", use_container_width=True):
-                basics_query = "Explain the SA-CCR methodology and its key components"
-                self._process_ai_query(basics_query)
+        with examples_tab2:
+            st.markdown("**🎯 Optimization Examples:**")
+            optimization_examples = [
+                "How can central clearing reduce my capital requirements?",
+                "What netting strategies work best for interest rate swaps?",
+                "Analyze my portfolio for collateral management opportunities"
+            ]
+            for example in optimization_examples:
+                if st.button(f"🎯 {example[:30]}...", key=f"opt_{hash(example)}", help=example):
+                    self._process_ai_query(example)
         
-        with col3:
-            if st.button("🎯 Optimization Tips", use_container_width=True):
-                optimization_query = "What are the most effective ways to reduce SA-CCR capital requirements?"
-                self._process_ai_query(optimization_query)
+        with examples_tab3:
+            st.markdown("**📚 Educational Examples:**")
+            educational_examples = [
+                "Explain the Basel SA-CCR 24-step calculation process",
+                "What's the difference between bilateral and cleared trades?",
+                "How does the PFE multiplier formula work?"
+            ]
+            for example in educational_examples:
+                if st.button(f"📚 {example[:30]}...", key=f"edu_{hash(example)}", help=example):
+                    self._process_ai_query(example)
+    
+    def _render_enhanced_chat_interface(self):
+        """Render enhanced chat interface with better UX"""
         
-        with col4:
-            if st.button("🧹 Clear Chat", use_container_width=True):
+        # Chat history container with custom styling
+        st.markdown("### 💬 Conversation")
+        
+        # Display chat history with enhanced styling
+        chat_container = st.container()
+        with chat_container:
+            for i, message in enumerate(st.session_state.ai_chat_history):
+                if message['role'] == 'user':
+                    st.markdown(f"""
+                    <div class="chat-message user">
+                        <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                            <strong>👤 You</strong>
+                            <span style="margin-left: auto; font-size: 0.8rem; color: #6b7280;">
+                                {message['timestamp'].strftime('%H:%M')}
+                            </span>
+                        </div>
+                        <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                            {message['content']}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div class="chat-message assistant">
+                        <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                            <strong>🤖 SA-CCR Assistant</strong>
+                            <span style="margin-left: auto; font-size: 0.8rem; color: #6b7280;">
+                                {message['timestamp'].strftime('%H:%M')}
+                            </span>
+                        </div>
+                        <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; border-left: 4px solid #16a34a;">
+                            {message['content']}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Enhanced chat input with better UX
+        st.markdown("### ✍️ Ask Your Question")
+        
+        # Use form for better UX
+        with st.form("enhanced_chat_form", clear_on_submit=True):
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                user_input = st.text_area(
+                    "Type your message:",
+                    placeholder="💡 Try: 'Calculate SA-CCR for a $500M interest rate swap with Goldman Sachs, 7-year maturity' or 'How can I optimize my portfolio to reduce capital by 25%?'",
+                    height=100,
+                    help="Describe your trades, ask optimization questions, or request SA-CCR explanations"
+                )
+            
+            with col2:
+                st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+                send_button = st.form_submit_button("🚀 Send", type="primary", use_container_width=True)
+                clear_button = st.form_submit_button("🧹 Clear Chat", use_container_width=True)
+                export_button = st.form_submit_button("📤 Export", use_container_width=True)
+            
+            if send_button and user_input.strip():
+                self._process_ai_query(user_input.strip())
+            elif clear_button:
                 st.session_state.ai_chat_history = st.session_state.ai_chat_history[:1]  # Keep welcome message
+                st.success("🧹 Chat history cleared!")
                 st.rerun()
+            elif export_button:
+                self._export_chat_history()
+        
+        # Add typing indicator simulation when processing
+        if len(st.session_state.ai_chat_history) > 1:
+            last_message = st.session_state.ai_chat_history[-1]
+            if last_message['role'] == 'user':
+                # Show typing indicator
+                st.markdown("""
+                <div style="display: flex; align-items: center; margin: 1rem 0; color: #6b7280;">
+                    <div class="loading-spinner"></div>
+                    <span style="margin-left: 0.5rem;">🤖 Assistant is thinking...</span>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    def _export_chat_history(self):
+        """Export chat history to downloadable format"""
+        try:
+            chat_export = []
+            for message in st.session_state.ai_chat_history:
+                chat_export.append({
+                    'role': message['role'],
+                    'content': message['content'],
+                    'timestamp': message['timestamp'].isoformat()
+                })
+            
+            import json
+            export_data = json.dumps(chat_export, indent=2)
+            
+            st.download_button(
+                label="📥 Download Chat History",
+                data=export_data,
+                file_name=f"saccr_chat_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
+            st.success("✅ Chat history ready for download!")
+            
+        except Exception as e:
+            st.error(f"❌ Export failed: {str(e)}")
     
     def _render_chat_interface(self):
         """Render the chat interface"""
